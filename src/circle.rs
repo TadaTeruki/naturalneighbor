@@ -3,45 +3,27 @@ use rstar::{RTreeObject, AABB, PointDistance};
 use crate::Point;
 
 #[derive(Debug, Clone)]
-pub(crate) struct CircumCircle {
+pub(crate) struct Triangle {
     itriangle: usize,
-    origin: Point,
-    radius: f64,
+    aabb: AABB<[f64; 2]>,
 }
 
-impl CircumCircle {
+impl Triangle {
     pub fn itriangle(&self) -> usize {
         self.itriangle
-    }
-
-    pub fn origin(&self) -> &Point {
-        &self.origin
-    }
-
-    pub fn radius(&self) -> f64 {
-        self.radius
     }
 
     pub fn from_triangle(points: &[Point], triangles: &[usize], t: usize) -> Self {
         let triangle = [triangles[t * 3], triangles[t * 3 + 1], triangles[t * 3 + 2]];
 
-        let (x1, y1) = (points[triangle[0]].x, points[triangle[0]].y);
-        let (x2, y2) = (points[triangle[1]].x, points[triangle[1]].y);
-        let (x3, y3) = (points[triangle[2]].x, points[triangle[2]].y);
-        
-        let d = 2.0 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
-        
-        let ux = ((x1*x1 + y1*y1) * (y2 - y3) + (x2*x2 + y2*y2) * (y3 - y1) + (x3*x3 + y3*y3) * (y1 - y2)) / d;
-        let uy = ((x1*x1 + y1*y1) * (x3 - x2) + (x2*x2 + y2*y2) * (x1 - x3) + (x3*x3 + y3*y3) * (x2 - x1)) / d;
-        
-        let origin = Point { x: ux, y: uy };
-        
-        let radius = ((origin.x - x1).powi(2) + (origin.y - y1).powi(2)).sqrt();
+        let min_x = f64::min(f64::min(points[triangle[0]].x, points[triangle[1]].x), points[triangle[2]].x);
+        let min_y = f64::min(f64::min(points[triangle[0]].y, points[triangle[1]].y), points[triangle[2]].y);
+        let max_x = f64::max(f64::max(points[triangle[0]].x, points[triangle[1]].x), points[triangle[2]].x);
+        let max_y = f64::max(f64::max(points[triangle[0]].y, points[triangle[1]].y), points[triangle[2]].y);
         
         Self {
             itriangle: t,
-            origin,
-            radius,
+            aabb: AABB::from_corners([min_x, min_y], [max_x, max_y]),
         }
     }
 
@@ -58,46 +40,22 @@ impl CircumCircle {
     
         s > 0.0 && t > 0.0 && 1.0 - s - t > 0.0
     }
-
-    pub fn point_in_circle(&self, point: &Point) -> bool {
-        let d_x = self.origin.x - point.x;
-        let d_y = self.origin.y - point.y;
-        let distance_to_origin_2 = d_x * d_x + d_y * d_y;
-        let radius_2 = self.radius * self.radius;
-        distance_to_origin_2 <= radius_2
-    }
 }
 
-impl RTreeObject for CircumCircle {
+impl RTreeObject for Triangle {
     type Envelope = AABB<[f64; 2]>;
 
     fn envelope(&self) -> Self::Envelope {
-        let corner_1 = [self.origin.x - self.radius, self.origin.y - self.radius];
-        let corner_2 = [self.origin.x + self.radius, self.origin.y + self.radius];
-        AABB::from_corners(corner_1, corner_2)
+        self.aabb
     }
 }
 
-impl PointDistance for CircumCircle
+impl PointDistance for Triangle
 {
     fn distance_2(&self, point: &[f64; 2]) -> f64
     {
-        let d_x = self.origin.x - point[0];
-        let d_y = self.origin.y - point[1];
-        let distance_to_origin = (d_x * d_x + d_y * d_y).sqrt();
-        let distance_to_ring = distance_to_origin - self.radius;
-        let distance_to_circle = f64::max(0.0, distance_to_ring);
-        // We must return the squared distance!
-        distance_to_circle * distance_to_circle
+        let min = self.aabb.min_point(point);
+        let dist = (min[0] - point[0]).powi(2) + (min[1] - point[1]).powi(2);
+        dist
     }
-    /* 
-    fn contains_point(&self, point: &[f64; 2]) -> bool
-    {
-        let d_x = self.origin.x - point[0];
-        let d_y = self.origin.y - point[1];
-        let distance_to_origin_2 = d_x * d_x + d_y * d_y;
-        let radius_2 = self.radius * self.radius;
-        distance_to_origin_2 <= radius_2
-    }
-    */
 }

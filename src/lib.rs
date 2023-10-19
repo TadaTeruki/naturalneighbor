@@ -1,5 +1,5 @@
-use circle::CircumCircle;
-use util::{circumcircle, area_of_triangle};
+use circle::Triangle;
+use util::{circumcircle, next_harfedge};
 
 mod util;
 mod circle;
@@ -41,7 +41,7 @@ impl<'a, V> InterpolatorBuilder<'a, V> where V: Copy {
             let triangulation = delaunator::triangulate(points);
             
             let circumcircles = triangulation.triangles.chunks_exact(3).enumerate().map(|(t, _)| {
-                CircumCircle::from_triangle(&points, &triangulation.triangles, t)
+                Triangle::from_triangle(&points, &triangulation.triangles, t)
                 //CircumCircle::from_triangle(&points, [triangle[0], triangle[1], triangle[2]])
             }).collect::<Vec<_>>();
             
@@ -68,13 +68,14 @@ pub struct Interpolator<'a, V> where V: Copy {
     items: &'a [V],
     triangles: Vec<usize>,
     harfedges: Vec<usize>,
-    tree: rstar::RTree<CircumCircle>,
+    tree: rstar::RTree<Triangle>,
 }
 
 impl<'a, V> Interpolator<'a, V> where V: Copy {
-    pub fn interpolate(&self, p: Point, add: impl Fn(&V, &V) -> V, mul: impl Fn(&V, f64) -> V) -> Option<V> {
-        let triangles = self.tree.locate_all_at_point(&[p.x, p.y]).filter(|circle| {
-            circle.point_in_triangle(&self.points, &self.triangles, &p)
+    pub fn interpolate(&self, ptarget: Point, add: impl Fn(&V, &V) -> V, mul: impl Fn(&V, f64) -> V) -> Option<V>{
+
+        let triangles = self.tree.locate_all_at_point(&[ptarget.x, ptarget.y]).filter(|circle| {
+            circle.point_in_triangle(&self.points, &self.triangles, &ptarget)
         }).collect::<Vec<_>>();
 
         let it: usize = {
@@ -85,110 +86,102 @@ impl<'a, V> Interpolator<'a, V> where V: Copy {
             }
         };
 
-        let next_harfedge = |e: usize| -> usize {
-            if e % 3 == 2 {
-                e - 2
-            } else {
-                e + 1
+        let start = it*3;
+        let mut current = start;
+        let mut envelope = vec![];
+
+        // create boyer-watson envelope
+        loop {
+            let opposite = self.harfedges[current];
+            // triangle of the opposite harfedge
+            let oit = opposite / 3;
+            let triangle = [self.triangles[oit * 3], self.triangles[oit * 3 + 1], self.triangles[oit * 3 + 2]];
+            // circumcicle of the triangle
+            let (c, r) = circumcircle(&[&self.points[triangle[0]], &self.points[triangle[1]], &self.points[triangle[2]]]);
+            // check if the point is in the circumcircle
+            let dist2 = (c.x - ptarget.x).powi(2) + (c.y - ptarget.y).powi(2);
+
+            if dist2 <= r.powi(2) {
+                current = next_harfedge(opposite);
+                continue;
+            }
+
+            envelope.push(current);
+            current = next_harfedge(current);
+
+            if self.triangles[start] == self.triangles[current] {
+                break;
             }
         };
 
-        let prev_harfedge = |e: usize| -> usize {
-            if e % 3 == 0 {
-                e + 2
-            } else {
-                e - 1
-            }
-        };
-
-        // start point of each harfedges
-        let starts = [self.triangles[it * 3], self.triangles[it * 3 + 1], self.triangles[it * 3 + 2]];
-        // circumcenter of the triangle
-        let c2 = circumcircle(&[&self.points[starts[0]], &self.points[starts[1]], &self.points[starts[2]]]).0;
-        
-        // start point of opposite harfedges
-        let start_opposites = [self.harfedges[it*3], self.harfedges[it * 3 + 1], self.harfedges[it * 3 + 2]];
-        let opposite_triangles = [start_opposites[0]/3, start_opposites[1]/3, start_opposites[2]/3];
-
-        let envelope = start_opposites.iter().enumerate().map(|(i, start_opposite)| {
-            if *start_opposite >= self.harfedges.len() {
-                return vec![];
-            }
-
-            let next = next_harfedge(*start_opposite);
-            let prev = prev_harfedge(*start_opposite);
-            // 0: index of the target point, 1: order of the opposite triangle
-            vec![(self.triangles[next], opposite_triangles[i]), (self.triangles[prev], opposite_triangles[i])]
-        }).flatten().collect::<Vec<_>>();
-
-        let envelope_points = envelope.iter().map(|e| self.triangles[e.0]).collect::<Vec<_>>();
-
-        let areas = envelope.iter().enumerate().map(|(i, envl)| {
-            let ibp = envl.0;
+        let areas = envelope.iter().enumerate().map(|(i, e)| {
+            let ibp = self.triangles[*e];
             let bp = &self.points[ibp];
             let inext = (i + 1) % envelope.len();
             let iprev = (i + envelope.len() - 1) % envelope.len();
-            let point_next: &Point = &self.points[envelope[inext].0];
-            let point_prev: &Point = &self.points[envelope[iprev].0];
+            let point_next: &Point = &self.points[self.triangles[envelope[inext]]];
+            let point_prev: &Point = &self.points[self.triangles[envelope[iprev]]];
 
-            let m1 = Point { x: (bp.x + point_next.x) / 2., y: (bp.y + point_next.y) / 2. };
-            let m2 = Point { x: (bp.x + point_prev.x) / 2., y: (bp.y + point_prev.y) / 2. };
+            let mprev = &Point { x: (bp.x + point_prev.x) / 2., y: (bp.y + point_prev.y) / 2. };
+            let mnext = &Point { x: (bp.x + point_next.x) / 2., y: (bp.y + point_next.y) / 2. };
+            
+            let gprev = circumcircle(&[&ptarget, bp, point_prev]).0;
+            let gnext = circumcircle(&[&ptarget, bp, point_next]).0;
+            
+            let mut ce = envelope[iprev];
+            let mut cs = vec![mprev.clone()];
 
-            let itriangle_next = envl.1;
-            let itriangle_prev = {
-                if i%2 == 0 {
-                    envelope[iprev].1
-                } else {
-                    itriangle_next
+            loop {
+                let cit = ce/3;
+                let triangle = [&self.points[self.triangles[cit * 3]], &self.points[self.triangles[cit * 3 + 1]], &self.points[self.triangles[cit * 3 + 2]]];
+                let c = circumcircle(&triangle).0;
+                cs.push(c);
+                let next = next_harfedge(ce);
+                if *e == next {
+                    break;
                 }
+                ce = self.harfedges[next];
+            }
+
+            cs.push(mnext.clone());
+
+            let pre ={
+                let mut pre = 0.;
+                for i in 0..cs.len() {
+                    let inx = (i + 1) % cs.len();
+                    pre += (cs[i].x-cs[inx].x)*(cs[i].y+cs[inx].y);
+                }
+                pre
             };
 
-            let triangle_next =  [&self.points[self.triangles[it * 3]], &self.points[self.triangles[it * 3 + 1]], &self.points[self.triangles[it * 3 + 2]]];
-            let triangle_prev = [&self.points[self.triangles[it * 3]], &self.points[self.triangles[it * 3 + 1]], &self.points[self.triangles[it * 3 + 2]]];
+            let post = 
+                (mprev.x-gprev.x)*(mprev.y+gprev.y) +
+                (gprev.x-gnext.x)*(gprev.y+gnext.y) +
+                (gnext.x-mnext.x)*(gnext.y+mnext.y) +
+                (mnext.x-mprev.x)*(mnext.y+mprev.y);
 
-            
-            //let triangle_next = [self.triangles[itriangle_next * 3], self.triangles[itriangle_next * 3 + 1], self.triangles[itriangle_next * 3 + 2]];
-            //let triangle_prev = [self.triangles[itriangle_prev * 3], self.triangles[itriangle_prev * 3 + 1], self.triangles[itriangle_prev * 3 + 2]];
-            
-
-            //let c1 = circumcircle(&self.points, &triangle_next).0;
-            //let c3 = circumcircle(&self.points, &triangle_prev).0;
-            let c1 = circumcircle(&triangle_next).0;
-            let c3 = circumcircle(&triangle_prev).0;
-
-            // calculate area of the polygon formed by bp->m1->c1->c2->c3->m2->bp
-            let area_positive =
-                area_of_triangle(&[bp, &m1, &c1]) +
-                area_of_triangle(&[bp, &c1, &c2]) +
-                area_of_triangle(&[bp, &c2, &c3]) +
-                area_of_triangle(&[bp, &c3, &m2]);
-
-            let g1 = circumcircle(&[&p, bp, point_next]).0;
-            let g2 = circumcircle(&[&p, bp, point_prev]).0;
-
-            // calculate area of the polygon formed by bp->m1->g1->g2->m2->bp
-            let area_negative =
-                area_of_triangle(&[bp, &m1, &g1]) +
-                area_of_triangle(&[bp, &g1, &g2]) +
-                area_of_triangle(&[bp, &g2, &m2]);
-
-            
-            //println!("area_positive - area_negative: {}", area_positive - area_negative);
-
-            area_positive - area_negative
-
+            let area = pre - post;
+            area
         }).collect::<Vec<_>>();
 
-        let asum = areas.iter().sum::<f64>();
-        let weights = areas.iter().map(|a| a / asum).collect::<Vec<_>>();
+        let area_sum = areas.iter().sum::<f64>();
+        let weights = areas.iter().map(|a| a / area_sum).collect::<Vec<_>>();
 
-        let vs = envelope.iter().enumerate().map(|(i,envl)| {
-            let ibp = envl.0;
+        let vs = envelope.iter().enumerate().map(|(i, e)| {
+            let ibp = self.triangles[*e];
             let v = &self.items[ibp];
             mul(v, weights[i])
         }).collect::<Vec<_>>();
-        let v = vs.iter().fold(vs[0], |acc, v| add(&acc, v));
-        
+
+        let v = {
+            let mut v = vs[0];
+            for i in 1..vs.len() {
+                v = add(&v, &vs[i]);
+            }
+            v
+        };
+
         Some(v)
+        
     }
 }
