@@ -126,5 +126,5 @@ fn main() {
     });
 
     // Save the image as a PNG file
-    img.save("points.png").unwrap();
+    img.save("color.png").unwrap();
 }
