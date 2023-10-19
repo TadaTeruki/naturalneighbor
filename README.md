@@ -12,6 +12,9 @@ The implementation is based on 'A Fast and Accurate Algorithm for Natural Neighb
 $ cargo run --example color
 ```
 
+![color](https://github.com/TadaTeruki/naturalneighbor/assets/69315285/0b8f7bc6-a15f-470b-bad3-7852eee55dcd)
+
+
 # References
 
 https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html
