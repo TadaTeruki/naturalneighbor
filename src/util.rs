@@ -17,7 +17,6 @@ pub(crate) fn circumcenter(triangle: &[&Point; 3]) -> Point {
     Point { x: ux, y: uy }
 }
 
-
 pub(crate) fn circumcircle_with_radius_2(triangle: &[&Point; 3]) -> (Point, f64) {
     let p1 = &triangle[0];
     let circumcenter = circumcenter(triangle);

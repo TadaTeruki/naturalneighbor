@@ -1,5 +1,5 @@
 use primitives::Triangle;
-use util::{next_harfedge, circumcircle_with_radius_2, circumcenter};
+use util::{circumcenter, circumcircle_with_radius_2, next_harfedge};
 
 mod primitives;
 mod util;
@@ -17,7 +17,10 @@ where
     items: Option<&'a [V]>,
 }
 
-impl<V> Default for InterpolatorBuilder<'_, V> where V: Lerpable {
+impl<V> Default for InterpolatorBuilder<'_, V>
+where
+    V: Lerpable,
+{
     fn default() -> Self {
         Self {
             points: None,
@@ -30,7 +33,6 @@ impl<'a, V> InterpolatorBuilder<'a, V>
 where
     V: Lerpable,
 {
-
     pub fn set_points(&self, points: &'a [Point]) -> Self {
         Self {
             points: Some(points),
