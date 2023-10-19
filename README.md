@@ -2,7 +2,8 @@
 
 NNI (Natural Neighbor Interpolation) library for Rust.
 
-The implementation is based on 'A Fast and Accurate Algorithm for Natural Neighbor Interpolation' by G.W. Lucas.
+The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](
+https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
 
 **Note: This library is still in development and not ready for production use.**
 
