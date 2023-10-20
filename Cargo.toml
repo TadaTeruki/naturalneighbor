@@ -3,6 +3,8 @@ name = "naturalneighbor"
 version = "1.0.0"
 edition = "2021"
 license = "MIT"
+description = "2D Natural Neighbor Interpolation (NNI) library for Rust."
+authors = ["Teruki TADA <tadateruki.public@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
