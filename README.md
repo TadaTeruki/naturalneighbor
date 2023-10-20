@@ -12,6 +12,8 @@ This libary is designed to be fast and memory efficient.
  - Uses [rstar](https://crates.io/crates/rstar) for efficient spatial indexing
  - Dynamic memory allocation is never used in the calculation
 
+TODO: Add benchmark results
+
 ## Installation
 
 ```
