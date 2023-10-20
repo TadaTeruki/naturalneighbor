@@ -11,12 +11,14 @@ pub trait Lerpable: Clone {
     fn lerp(&self, other: &Self, weight: f64) -> Self;
 }
 
-/// Float value that implements [Lerpable].
-pub type Weight = f64;
-
-impl Lerpable for Weight {
+// impl Lerpable for all float values that can convert to f64
+impl<V> Lerpable for V
+where
+    V: Into<f64> + From<f64> + Copy,
+{
     fn lerp(&self, other: &Self, weight: f64) -> Self {
-        self * (1.0 - weight) + other * weight
+        let result_f64 = (*self).into() * (1.0 - weight) + (*other).into() * weight;
+        result_f64.into()
     }
 }
 
