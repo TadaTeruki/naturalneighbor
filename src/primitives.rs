@@ -56,7 +56,7 @@ impl Triangle {
         let t = 1.0 / area2
             * (p1.x * p2.y - p1.y * p2.x + (p1.y - p2.y) * point.x + (p2.x - p1.x) * point.y);
 
-        s > 0.0 && t > 0.0 && 1.0 - s - t > 0.0
+        s >= 0.0 && t >= 0.0 && 1.0 - s - t >= 0.0
     }
 }
 

@@ -5,10 +5,22 @@ mod primitives;
 mod util;
 pub type Point = delaunator::Point;
 
+/// Trait for linear interpolation.
+/// The value to be interpolated must implement this trait.
 pub trait Lerpable: Clone {
     fn lerp(&self, other: &Self, weight: f64) -> Self;
 }
 
+/// Float value that implements [Lerpable].
+pub type Weight = f64;
+
+impl Lerpable for Weight {
+    fn lerp(&self, other: &Self, weight: f64) -> Self {
+        self * (1.0 - weight) + other * weight
+    }
+}
+
+/// Builder for Interpolator.
 pub struct InterpolatorBuilder<'a, V>
 where
     V: Lerpable,
@@ -82,6 +94,7 @@ where
     }
 }
 
+// Interpolator
 pub struct Interpolator<'a, V>
 where
     V: Lerpable,
@@ -100,7 +113,13 @@ where
     // ebase: harfedge starting from base point
     // eprev: previous harfedge of ebase
     // enext: next harfedge of ebase
-    fn calculate_area(&self, ptarget: &Point, eprev: usize, ebase: usize, enext: usize) -> f64 {
+    fn calculate_weight_area(
+        &self,
+        ptarget: &Point,
+        eprev: usize,
+        ebase: usize,
+        enext: usize,
+    ) -> f64 {
         let point_prev: &Point = &self.points[self.triangles[eprev]];
         let point_base = &self.points[self.triangles[ebase]];
         let point_next: &Point = &self.points[self.triangles[enext]];
@@ -149,10 +168,16 @@ where
         pre - post
     }
 
-    fn add_to_value(
+    // value: the value to be weighted
+    // weight_sum: tentative sum of the weight
+    // ptarget: the point to be interpolated
+    // ebase: harfedge starting from base point
+    // eprev: previous harfedge of ebase
+    // enext: next harfedge of ebase
+    fn apply_weight(
         &self,
         value: Option<V>,
-        area_sum: f64,
+        weight_sum: f64,
         ptarget: &Point,
         eprev: usize,
         ebase: usize,
@@ -160,23 +185,52 @@ where
     ) -> (Option<V>, f64) {
         let v2 = &self.items[self.triangles[ebase]];
 
-        let area = self.calculate_area(ptarget, eprev, ebase, enext);
-        let area_sum = area_sum + area;
+        let weight = self.calculate_weight_area(ptarget, eprev, ebase, enext);
+        let weight_sum = weight_sum + weight;
 
         if let Some(value) = value {
-            (Some(value.lerp(v2, area / area_sum)), area_sum)
+            (Some(value.lerp(v2, weight / weight_sum)), weight_sum)
         } else {
-            (Some(v2.clone()), area_sum)
+            (Some(v2.clone()), weight_sum)
         }
     }
 
+    /// Interpolate the value at the point.
+    /// If the point is outside the triangulation, None is returned.
     pub fn interpolate(&self, ptarget: Point) -> Option<V> {
+        // initial edge
         let start: usize = {
             let triangles = self
                 .tree
                 .locate_all_at_point(&[ptarget.x, ptarget.y])
                 .filter(|circle| circle.point_in_triangle(self.points, &self.triangles, &ptarget))
                 .collect::<Vec<_>>();
+
+            if triangles.len() >= 3 {
+                let mut result = None;
+                triangles.iter().for_each(|t| {
+                    let it = t.itriangle();
+                    let triangle = [
+                        self.triangles[it * 3],
+                        self.triangles[it * 3 + 1],
+                        self.triangles[it * 3 + 2],
+                    ];
+                    let points = [
+                        &self.points[triangle[0]],
+                        &self.points[triangle[1]],
+                        &self.points[triangle[2]],
+                    ];
+                    points.iter().enumerate().for_each(|(i, p)| {
+                        if p.x == ptarget.x && p.y == ptarget.y {
+                            result = Some(self.items[triangle[i]].clone());
+                        }
+                    });
+                });
+                if let Some(result) = result {
+                    return Some(result);
+                }
+            }
+
             if let Some(t) = triangles.get(0) {
                 t.itriangle() * 3
             } else {
@@ -184,17 +238,28 @@ where
             }
         };
 
+        // The value to be returned.
         let mut value: Option<V> = None;
 
+        // Stream of edges on the boyer-watson envelope.
+        // epool.0 -> epool.1 -> epool.2
+        // The result value is updated when all elements of epool are on the envelope.
         let mut epool = (self.harfedges.len(), self.harfedges.len(), start);
+
+        // the first and second edge of the envelope.
+        // efirst2.0 -> efirst2.1
+        // In the first and second iteration, the result value is not calculated because some elements of epool is not on the envelope.
+        // After the envelope is closed, the rest of the process is processed using efirst2.
         let mut efirst2 = None;
-        let mut area_sum = 0.;
+
+        // the tentative sum of the weight.
+        let mut weight_sum = 0.;
 
         loop {
             let opposite = self.harfedges[epool.2];
 
+            // if the opposite harfedge of the earlist harfedge in the stream exists
             if opposite < self.harfedges.len() {
-                // triangle of the opposite harfedge
                 let oit = opposite / 3;
                 let triangle = [
                     self.triangles[oit * 3],
@@ -210,34 +275,37 @@ where
                 // check if the point is in the circumcircle
                 let dist2 = (c.x - ptarget.x).powi(2) + (c.y - ptarget.y).powi(2);
 
-                if dist2 <= r2 {
+                if dist2 < r2 {
                     epool.2 = next_harfedge(opposite);
                     continue;
                 }
             }
 
+            // if it is in the first iteration after all elements of epool are on the envelope
             if epool.0 < self.harfedges.len() {
                 if efirst2.is_none() {
                     efirst2 = Some((epool.0, epool.1));
                 }
-                (value, area_sum) =
-                    self.add_to_value(value, area_sum, &ptarget, epool.0, epool.1, epool.2);
+                (value, weight_sum) =
+                    self.apply_weight(value, weight_sum, &ptarget, epool.0, epool.1, epool.2);
             }
 
+            // update epool
             epool = (epool.1, epool.2, next_harfedge(epool.2));
 
+            // if the envelope is closed
             if self.triangles[start] == self.triangles[epool.2] {
-                (value, area_sum) = self.add_to_value(
+                (value, weight_sum) = self.apply_weight(
                     value,
-                    area_sum,
+                    weight_sum,
                     &ptarget,
                     epool.0,
                     epool.1,
                     efirst2.unwrap().0,
                 );
-                (value, _) = self.add_to_value(
+                (value, _) = self.apply_weight(
                     value,
-                    area_sum,
+                    weight_sum,
                     &ptarget,
                     epool.1,
                     efirst2.unwrap().0,

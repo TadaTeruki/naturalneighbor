@@ -68,10 +68,13 @@ static PALLETE: [Color; 7] = [
 ];
 
 fn main() {
-    let (img_w, img_h) = (1000, 500);
+    // the number of points
     let n = 100;
+
+    // the radius of the points drawn on the image
     let radius = 3.0;
 
+    let (img_w, img_h) = (1000, 500);
     let mut img = ImageBuffer::from_pixel(img_w, img_h, Rgb([255 as u8, 255, 255]));
     let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_seed([0; 32]);
 
@@ -92,6 +95,7 @@ fn main() {
         .build()
         .unwrap();
 
+    // Draw the interpolated colors on the image
     for x in 0..img_w {
         for y in 0..img_h {
             let intp = interpolator.interpolate(Point {
