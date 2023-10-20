@@ -20,9 +20,9 @@ pub(crate) fn circumcenter(triangle: &[&Point; 3]) -> Point {
 pub(crate) fn circumcircle_with_radius_2(triangle: &[&Point; 3]) -> (Point, f64) {
     let p1 = &triangle[0];
     let circumcenter = circumcenter(triangle);
-    let circumradius = (p1.x - circumcenter.x).powi(2) + (p1.y - circumcenter.y).powi(2);
+    let circumradius2 = (p1.x - circumcenter.x).powi(2) + (p1.y - circumcenter.y).powi(2);
 
-    (circumcenter, circumradius)
+    (circumcenter, circumradius2)
 }
 
 pub(crate) fn next_harfedge(e: usize) -> usize {

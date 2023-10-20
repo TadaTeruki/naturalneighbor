@@ -49,12 +49,11 @@ impl Triangle {
         let p2 = &points[triangle[1]];
         let p3 = &points[triangle[2]];
 
-        let area =
-            0.5 * (-p2.y * p3.x + p1.y * (-p2.x + p3.x) + p1.x * (p2.y - p3.y) + p2.x * p3.y);
+        let area2 = -p2.y * p3.x + p1.y * (-p2.x + p3.x) + p1.x * (p2.y - p3.y) + p2.x * p3.y;
 
-        let s = 1.0 / (2.0 * area)
+        let s = 1.0 / area2
             * (p1.y * p3.x - p1.x * p3.y + (p3.y - p1.y) * point.x + (p1.x - p3.x) * point.y);
-        let t = 1.0 / (2.0 * area)
+        let t = 1.0 / area2
             * (p1.x * p2.y - p1.y * p2.x + (p1.y - p2.y) * point.x + (p2.x - p1.x) * point.y);
 
         s > 0.0 && t > 0.0 && 1.0 - s - t > 0.0
