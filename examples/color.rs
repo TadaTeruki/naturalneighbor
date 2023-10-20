@@ -91,19 +91,19 @@ fn main() {
 
     let interpolator = InterpolatorBuilder::default()
         .set_points(&points)
-        .set_items(&colors)
+        .set_values(&colors)
         .build()
         .unwrap();
 
     // Draw the interpolated colors on the image
     for x in 0..img_w {
         for y in 0..img_h {
-            let intp = interpolator.interpolate(Point {
+            let c = interpolator.interpolate(Point {
                 x: x as f64,
                 y: y as f64,
             });
 
-            if let Some(c) = intp {
+            if let Some(c) = c {
                 img.put_pixel(x as u32, y as u32, c.to_rgb());
             }
         }

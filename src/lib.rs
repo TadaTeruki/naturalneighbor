@@ -1,17 +1,52 @@
+//! # naturalneighbor
+//!
+//! `naturalneighbor` is a library to provide Natural Neighbor Interpolation (NNI) for Rust.
+//!
+//! The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
+
 use primitives::Triangle;
 use util::{circumcenter, circumcircle_with_radius_2, next_harfedge};
 
 mod primitives;
 mod util;
+
+/// Represents a 2D point.
 pub type Point = delaunator::Point;
 
-/// Trait for linear interpolation.
+/// Defines objects that can apply linear interpolation.
+///
 /// The value to be interpolated must implement this trait.
+/// `f64` implements this trait by default.
+///
+/// # Examples
+/// ```
+///
+/// use naturalneighbor::Lerpable;
+///
+/// #[derive(Copy, Clone, Debug)]
+/// pub struct Color {
+///     pub r: f64,
+///     pub g: f64,
+///     pub b: f64,
+/// }
+///
+/// impl Lerpable for Color {
+///     fn lerp(&self, other: &Self, weight: f64) -> Self {
+///         Self {
+///             r: self.r * (1.0 - weight) + other.r * weight,
+///             g: self.g * (1.0 - weight) + other.g * weight,
+///             b: self.b * (1.0 - weight) + other.b * weight,
+///         }
+///     }
+/// }
+/// ```
+
 pub trait Lerpable: Clone {
+    /// Apply linear interpolation with weight (0.0-1.0).
     fn lerp(&self, other: &Self, weight: f64) -> Self;
 }
 
-// impl Lerpable for all float values that can convert to f64
+// Implementation of Lerpable for all float values that can convert to f64
 impl<V> Lerpable for V
 where
     V: Into<f64> + From<f64> + Copy,
@@ -22,13 +57,48 @@ where
     }
 }
 
-/// Builder for Interpolator.
+/// Builder for [Interpolator].
+///
+/// The value to be interpolated must implement [Lerpable].
+///
+/// # Examples
+///
+/// ```
+/// use naturalneighbor::{Point, InterpolatorBuilder};
+///
+/// let points = [
+///     Point { x: 0.0, y: 0.0 },
+///     Point { x: 800.0, y: 0.0 },
+///     Point { x: 800.0, y: 800.0 },
+///     Point { x: 0.0, y: 800.0 },
+///     Point { x: 454.0, y: 223.0 },
+///     Point { x: 302.0, y: 345.0 },
+///     Point { x: 258.0, y: 632.0 },
+///     Point { x: 620.0, y: 513.0 },
+///     Point { x: 285.0, y: 479.0 },
+///     Point { x: 444.0, y: 453.0 },
+///     Point { x: 537.0, y: 315.0 },
+///     Point { x: 425.0, y: 610.0 },
+///     Point { x: 528.0, y: 223.0 },
+/// ];
+///
+/// // weights of the points to be interpolated
+/// let weights = [
+///     0.4, 0.9, 0.0, 0.7, 0.1, 0.3, 0.2, 0.4, 0.9, 0.0, 0.7, 0.8, 0.5,
+/// ];
+///
+/// let interpolator = InterpolatorBuilder::default()
+///     .set_points(&points)
+///     .set_values(&weights)
+///     .build()
+///     .unwrap();
+/// ```
 pub struct InterpolatorBuilder<'a, V>
 where
     V: Lerpable,
 {
     points: Option<&'a [Point]>,
-    items: Option<&'a [V]>,
+    values: Option<&'a [V]>,
 }
 
 impl<V> Default for InterpolatorBuilder<'_, V>
@@ -38,7 +108,7 @@ where
     fn default() -> Self {
         Self {
             points: None,
-            items: None,
+            values: None,
         }
     }
 }
@@ -47,6 +117,7 @@ impl<'a, V> InterpolatorBuilder<'a, V>
 where
     V: Lerpable,
 {
+    /// Set the points.
     pub fn set_points(&self, points: &'a [Point]) -> Self {
         Self {
             points: Some(points),
@@ -54,19 +125,23 @@ where
         }
     }
 
-    pub fn set_items(&self, items: &'a [V]) -> Self {
+    /// Set the values assosiated to the points to be interpolated.
+    pub fn set_values(&self, values: &'a [V]) -> Self {
         Self {
-            items: Some(items),
+            values: Some(values),
             ..*self
         }
     }
 
+    /// Build [Interpolator].
+    ///
+    /// This may return None if the points and values are not provided or the number of points and values are not the same.
     pub fn build(&self) -> Option<Interpolator<'a, V>>
     where
         V: Lerpable,
     {
-        if let (Some(points), Some(items)) = (self.points, self.items) {
-            if points.len() != items.len() {
+        if let (Some(points), Some(values)) = (self.points, self.values) {
+            if points.len() != values.len() {
                 return None;
             }
 
@@ -83,7 +158,7 @@ where
 
             let interpolator = Interpolator {
                 points,
-                items,
+                values,
                 triangles: triangulation.triangles,
                 harfedges: triangulation.halfedges,
                 tree: rtree,
@@ -96,13 +171,52 @@ where
     }
 }
 
-// Interpolator
+/// Provides method for natural neighbor interpolation.
+///
+/// This includes some st
+///  - RTree to find the triangle that contains the point to be interpolated.
+///  - Delaunay triangulation to construct the boyer-watson envelope for calculating the weight.
+///
+/// Use `interpolate(&self, ptarget: Point)` to interpolate the value at the point.
+///
+/// # Examples
+///
+/// ```
+///
+/// use naturalneighbor::{Point, InterpolatorBuilder};
+///
+/// let points = [
+///     Point { x: 0.0, y: 0.0 },
+///     Point { x: 100.0, y: 0.0 },
+///     Point { x: 100.0, y: 100.0 },
+///     Point { x: 0.0, y: 100.0 },
+/// ];
+///
+/// // weights of the points to be interpolated
+/// let weights = [
+///     1.0, 0.0, 1.0, 0.0
+/// ];
+///
+/// let interpolator = InterpolatorBuilder::default()
+///     .set_points(&points)
+///     .set_values(&weights)
+///     .build()
+///     .unwrap();
+///
+/// let weight = interpolator.interpolate(Point {
+///     x: 50.0,
+///     y: 50.0,
+/// }).unwrap();
+///
+/// assert_eq!(weight, 0.5);
+///
+/// ```
 pub struct Interpolator<'a, V>
 where
     V: Lerpable,
 {
     points: &'a [Point],
-    items: &'a [V],
+    values: &'a [V],
     triangles: Vec<usize>,
     harfedges: Vec<usize>,
     tree: rstar::RTree<Triangle>,
@@ -185,7 +299,7 @@ where
         ebase: usize,
         enext: usize,
     ) -> (Option<V>, f64) {
-        let v2 = &self.items[self.triangles[ebase]];
+        let v2 = &self.values[self.triangles[ebase]];
 
         let weight = self.calculate_weight_area(ptarget, eprev, ebase, enext);
         let weight_sum = weight_sum + weight;
@@ -224,7 +338,7 @@ where
                     ];
                     points.iter().enumerate().for_each(|(i, p)| {
                         if p.x == ptarget.x && p.y == ptarget.y {
-                            result = Some(self.items[triangle[i]].clone());
+                            result = Some(self.values[triangle[i]].clone());
                         }
                     });
                 });

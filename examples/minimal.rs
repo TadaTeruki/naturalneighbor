@@ -26,26 +26,26 @@ fn main() {
         0.4, 0.9, 0.0, 0.7, 0.1, 0.3, 0.2, 0.4, 0.9, 0.0, 0.7, 0.8, 0.5,
     ];
 
-    // Create an interpolator with random points and random colors
+    // Create an interpolator
     let interpolator = InterpolatorBuilder::default()
         .set_points(&points)
-        .set_items(&weights)
+        .set_values(&weights)
         .build()
         .unwrap();
 
     // Draw the interpolated colors on the image
     for x in 0..img_w {
         for y in 0..img_h {
-            let intp = interpolator.interpolate(Point {
+            let v = interpolator.interpolate(Point {
                 x: x as f64,
                 y: y as f64,
             });
 
-            if let Some(c) = intp {
+            if let Some(v) = v {
                 img.put_pixel(
                     x as u32,
                     y as u32,
-                    Rgb([(c * 255.0) as u8, (c * 255.0) as u8, (c * 255.0) as u8]),
+                    Rgb([(v * 255.0) as u8, (v * 255.0) as u8, (v * 255.0) as u8]),
                 );
             }
         }

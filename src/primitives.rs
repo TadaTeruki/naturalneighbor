@@ -2,6 +2,7 @@ use rstar::{PointDistance, RTreeObject, AABB};
 
 use crate::Point;
 
+/// Triangle object to be inserted into an RTree
 #[derive(Debug, Clone)]
 pub(crate) struct Triangle {
     itriangle: usize,
