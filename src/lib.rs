@@ -5,7 +5,7 @@ mod primitives;
 mod util;
 pub type Point = delaunator::Point;
 
-pub trait Lerpable: Copy {
+pub trait Lerpable: Clone {
     fn lerp(&self, other: &Self, weight: f64) -> Self;
 }
 
@@ -97,21 +97,21 @@ impl<'a, V> Interpolator<'a, V>
 where
     V: Lerpable,
 {
-    // ebp: harfedge starting from base point
-    // eprev: previous harfedge of ebp
-    // enext: next harfedge of ebp
-    fn calculate_area(&self, ptarget: &Point, eprev: usize, ebp: usize, enext: usize) -> f64 {
-        let bp = &self.points[self.triangles[ebp]];
-        let point_next: &Point = &self.points[self.triangles[enext]];
+    // ebase: harfedge starting from base point
+    // eprev: previous harfedge of ebase
+    // enext: next harfedge of ebase
+    fn calculate_area(&self, ptarget: &Point, eprev: usize, ebase: usize, enext: usize) -> f64 {
         let point_prev: &Point = &self.points[self.triangles[eprev]];
+        let point_base = &self.points[self.triangles[ebase]];
+        let point_next: &Point = &self.points[self.triangles[enext]];
 
         let mprev = &Point {
-            x: (bp.x + point_prev.x) / 2.,
-            y: (bp.y + point_prev.y) / 2.,
+            x: (point_base.x + point_prev.x) / 2.,
+            y: (point_base.y + point_prev.y) / 2.,
         };
         let mnext = &Point {
-            x: (bp.x + point_next.x) / 2.,
-            y: (bp.y + point_next.y) / 2.,
+            x: (point_base.x + point_next.x) / 2.,
+            y: (point_base.y + point_next.y) / 2.,
         };
 
         let mut ce = eprev;
@@ -130,7 +130,7 @@ where
                 pre += (cs1.x - c.x) * (cs1.y + c.y);
                 cs1 = c;
                 let next = next_harfedge(ce);
-                if ebp == next {
+                if ebase == next {
                     break;
                 }
                 ce = self.harfedges[next];
@@ -138,8 +138,8 @@ where
             pre + (cs1.x - mnext.x) * (cs1.y + mnext.y) + (mnext.x - mprev.x) * (mnext.y + mprev.y)
         };
 
-        let gprev = circumcenter(&[ptarget, bp, point_prev]);
-        let gnext = circumcenter(&[ptarget, bp, point_next]);
+        let gprev = circumcenter(&[ptarget, point_base, point_prev]);
+        let gnext = circumcenter(&[ptarget, point_base, point_next]);
 
         let post = (mprev.x - gprev.x) * (mprev.y + gprev.y)
             + (gprev.x - gnext.x) * (gprev.y + gnext.y)
@@ -149,83 +149,104 @@ where
         pre - post
     }
 
+    fn add_to_value(
+        &self,
+        value: Option<V>,
+        area_sum: f64,
+        ptarget: &Point,
+        eprev: usize,
+        ebase: usize,
+        enext: usize,
+    ) -> (Option<V>, f64) {
+        let v2 = &self.items[self.triangles[ebase]];
+
+        let area = self.calculate_area(ptarget, eprev, ebase, enext);
+        let area_sum = area_sum + area;
+
+        if let Some(value) = value {
+            (Some(value.lerp(v2, area / area_sum)), area_sum)
+        } else {
+            (Some(v2.clone()), area_sum)
+        }
+    }
+
     pub fn interpolate(&self, ptarget: Point) -> Option<V> {
-        let it: usize = {
+        let start: usize = {
             let triangles = self
                 .tree
                 .locate_all_at_point(&[ptarget.x, ptarget.y])
                 .filter(|circle| circle.point_in_triangle(self.points, &self.triangles, &ptarget))
                 .collect::<Vec<_>>();
             if let Some(t) = triangles.get(0) {
-                t.itriangle()
+                t.itriangle() * 3
             } else {
                 return None;
             }
         };
 
-        // create boyer-watson envelope
-        let envelope = {
-            let mut envelope = vec![];
+        let mut value: Option<V> = None;
 
-            let start = it * 3;
-            let mut current = start;
-            loop {
-                let opposite = self.harfedges[current];
-
-                if opposite < self.harfedges.len() {
-                    // triangle of the opposite harfedge
-                    let oit = opposite / 3;
-                    let triangle = [
-                        self.triangles[oit * 3],
-                        self.triangles[oit * 3 + 1],
-                        self.triangles[oit * 3 + 2],
-                    ];
-                    // circumcicle of the triangle
-                    let (c, r2) = circumcircle_with_radius_2(&[
-                        &self.points[triangle[0]],
-                        &self.points[triangle[1]],
-                        &self.points[triangle[2]],
-                    ]);
-                    // check if the point is in the circumcircle
-                    let dist2 = (c.x - ptarget.x).powi(2) + (c.y - ptarget.y).powi(2);
-
-                    if dist2 <= r2 {
-                        current = next_harfedge(opposite);
-                        continue;
-                    }
-                }
-
-                envelope.push(current);
-                current = next_harfedge(current);
-
-                if self.triangles[start] == self.triangles[current] {
-                    break;
-                }
-            }
-            envelope
-        };
-
-        let mut intp = None;
+        let mut epool = (self.harfedges.len(), self.harfedges.len(), start);
+        let mut efirst2 = None;
         let mut area_sum = 0.;
-        envelope.iter().enumerate().for_each(|(i, eref)| {
-            let ebp = *eref;
-            let eprev = envelope[(i + envelope.len() - 1) % envelope.len()];
-            let enext = envelope[(i + 1) % envelope.len()];
 
-            let ibp = self.triangles[envelope[i]];
-            let v2 = self.items[ibp];
+        loop {
+            let opposite = self.harfedges[epool.2];
 
-            let area = self.calculate_area(&ptarget, eprev, ebp, enext);
-            area_sum += area;
+            if opposite < self.harfedges.len() {
+                // triangle of the opposite harfedge
+                let oit = opposite / 3;
+                let triangle = [
+                    self.triangles[oit * 3],
+                    self.triangles[oit * 3 + 1],
+                    self.triangles[oit * 3 + 2],
+                ];
+                // circumcicle of the triangle
+                let (c, r2) = circumcircle_with_radius_2(&[
+                    &self.points[triangle[0]],
+                    &self.points[triangle[1]],
+                    &self.points[triangle[2]],
+                ]);
+                // check if the point is in the circumcircle
+                let dist2 = (c.x - ptarget.x).powi(2) + (c.y - ptarget.y).powi(2);
 
-            if intp.is_some() {
-                intp = Some(v2);
-                return;
+                if dist2 <= r2 {
+                    epool.2 = next_harfedge(opposite);
+                    continue;
+                }
             }
 
-            intp = Some(intp.unwrap().lerp(&v2, area / area_sum));
-        });
+            if epool.0 < self.harfedges.len() {
+                if efirst2.is_none() {
+                    efirst2 = Some((epool.0, epool.1));
+                }
+                (value, area_sum) =
+                    self.add_to_value(value, area_sum, &ptarget, epool.0, epool.1, epool.2);
+            }
 
-        intp
+            epool = (epool.1, epool.2, next_harfedge(epool.2));
+
+            if self.triangles[start] == self.triangles[epool.2] {
+                (value, area_sum) = self.add_to_value(
+                    value,
+                    area_sum,
+                    &ptarget,
+                    epool.0,
+                    epool.1,
+                    efirst2.unwrap().0,
+                );
+                (value, _) = self.add_to_value(
+                    value,
+                    area_sum,
+                    &ptarget,
+                    epool.1,
+                    efirst2.unwrap().0,
+                    efirst2.unwrap().1,
+                );
+                break;
+            }
+        }
+
+        value
     }
 }
