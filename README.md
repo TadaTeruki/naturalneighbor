@@ -18,7 +18,7 @@ TODO: Add benchmark results
 
 ```
 [dependencies]
-"naturalneighbor" = "0.1"
+"naturalneighbor" = "1.0"
 ```
 
 ## Usage
