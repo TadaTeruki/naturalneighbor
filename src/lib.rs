@@ -1,10 +1,10 @@
 //! # naturalneighbor
 //!
-//! `naturalneighbor` is a library to provide Natural Neighbor Interpolation (NNI) for Rust.
+//! `naturalneighbor` is a library to provide 2D Natural Neighbor Interpolation (NNI) for Rust.
 //!
 //! The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
-
 use primitives::Triangle;
+use thiserror::Error;
 use util::{circumcenter, circumcircle_with_radius_2, next_harfedge};
 
 mod primitives;
@@ -113,6 +113,18 @@ where
     }
 }
 
+#[derive(Debug, Error)]
+pub enum BuildError {
+    /// Points or/and values are not provided.
+    /// You need to call `set_points` and `set_values` before calling `build`.
+    #[error("points or/and values are not provided")]
+    PointsAndValuesNotProvided,
+
+    /// The number of points and values are not the same.
+    #[error("points and values are not the same length")]
+    PointsAndValuesNotSameLength,
+}
+
 impl<'a, V> InterpolatorBuilder<'a, V>
 where
     V: Lerpable,
@@ -136,13 +148,13 @@ where
     /// Build [Interpolator].
     ///
     /// This may return None if the points and values are not provided or the number of points and values are not the same.
-    pub fn build(&self) -> Option<Interpolator<'a, V>>
+    pub fn build(&self) -> Result<Interpolator<'a, V>, BuildError>
     where
         V: Lerpable,
     {
         if let (Some(points), Some(values)) = (self.points, self.values) {
             if points.len() != values.len() {
-                return None;
+                return Err(BuildError::PointsAndValuesNotSameLength);
             }
 
             let triangulation = delaunator::triangulate(points);
@@ -164,12 +176,14 @@ where
                 tree: rtree,
             };
 
-            return Some(interpolator);
+            return Ok(interpolator);
         };
 
-        None
+        Err(BuildError::PointsAndValuesNotProvided)
     }
 }
+
+
 
 /// Provides method for natural neighbor interpolation.
 ///
