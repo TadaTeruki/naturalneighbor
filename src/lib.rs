@@ -93,15 +93,15 @@ where
 ///     .build()
 ///     .unwrap();
 /// ```
-pub struct InterpolatorBuilder<'a, V>
+pub struct InterpolatorBuilder<'p, 'v, V>
 where
     V: Lerpable,
 {
-    points: Option<&'a [Point]>,
-    values: Option<&'a [V]>,
+    points: Option<&'p [Point]>,
+    values: Option<&'v [V]>,
 }
 
-impl<V> Default for InterpolatorBuilder<'_, V>
+impl<V> Default for InterpolatorBuilder<'_, '_, V>
 where
     V: Lerpable,
 {
@@ -125,12 +125,12 @@ pub enum BuildError {
     PointsAndValuesNotSameLength,
 }
 
-impl<'a, V> InterpolatorBuilder<'a, V>
+impl<'p, 'v, V> InterpolatorBuilder<'p, 'v, V>
 where
     V: Lerpable,
 {
     /// Set the points.
-    pub fn set_points(&self, points: &'a [Point]) -> Self {
+    pub fn set_points(&self, points: &'p [Point]) -> Self {
         Self {
             points: Some(points),
             ..*self
@@ -138,7 +138,7 @@ where
     }
 
     /// Set the values assosiated to the points to be interpolated.
-    pub fn set_values(&self, values: &'a [V]) -> Self {
+    pub fn set_values(&self, values: &'v [V]) -> Self {
         Self {
             values: Some(values),
             ..*self
@@ -148,7 +148,7 @@ where
     /// Build [Interpolator].
     ///
     /// This may return None if the points and values are not provided or the number of points and values are not the same.
-    pub fn build(&self) -> Result<Interpolator<'a, V>, BuildError>
+    pub fn build(&self) -> Result<Interpolator<'p, 'v, V>, BuildError>
     where
         V: Lerpable,
     {
@@ -182,8 +182,6 @@ where
         Err(BuildError::PointsAndValuesNotProvided)
     }
 }
-
-
 
 /// Provides method for natural neighbor interpolation.
 ///
@@ -225,18 +223,18 @@ where
 /// assert_eq!(weight, 0.5);
 ///
 /// ```
-pub struct Interpolator<'a, V>
+pub struct Interpolator<'p, 'v, V>
 where
     V: Lerpable,
 {
-    points: &'a [Point],
-    values: &'a [V],
+    points: &'p [Point],
+    values: &'v [V],
     triangles: Vec<usize>,
     harfedges: Vec<usize>,
     tree: rstar::RTree<Triangle>,
 }
 
-impl<'a, V> Interpolator<'a, V>
+impl<'p, 'v, V> Interpolator<'p, 'v, V>
 where
     V: Lerpable,
 {
