@@ -5,11 +5,9 @@
 The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](
 https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
 
-## Performance
-
 This libary is designed to be fast and memory efficient.
- - Uses [delaunator](https://crates.io/crates/delaunator) for efficient delaunay triangulation
- - Uses [rstar](https://crates.io/crates/rstar) for efficient spatial indexing
+ - [delaunator](https://crates.io/crates/delaunator) for delaunay triangulation
+ - [rstar](https://crates.io/crates/rstar) for spatial indexing
  - Dynamic memory allocation is never used in the calculation
 
 TODO: Add benchmark results
