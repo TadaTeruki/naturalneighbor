@@ -1,5 +1,5 @@
 use image::{ImageBuffer, Rgb};
-use naturalneighbor::{InterpolatorBuilder, Point};
+use naturalneighbor::{Interpolator, Point};
 fn main() {
     let (img_w, img_h) = (800, 800);
 
@@ -27,19 +27,18 @@ fn main() {
     ];
 
     // Create an interpolator
-    let interpolator = InterpolatorBuilder::default()
-        .set_points(&points)
-        .set_values(&weights)
-        .build()
-        .unwrap();
+    let interpolator = Interpolator::new(&points);
 
     // Draw the interpolated colors on the image
     for x in 0..img_w {
         for y in 0..img_h {
-            let v = interpolator.interpolate(Point {
-                x: x as f64,
-                y: y as f64,
-            });
+            let v = interpolator.interpolate(
+                &weights,
+                Point {
+                    x: x as f64,
+                    y: y as f64,
+                },
+            );
 
             if let Some(v) = v {
                 img.put_pixel(

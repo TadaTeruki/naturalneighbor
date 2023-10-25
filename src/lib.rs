@@ -4,7 +4,6 @@
 //!
 //! The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
 use primitives::Triangle;
-use thiserror::Error;
 use util::{circumcenter, circumcircle_with_radius_2, next_harfedge};
 
 mod primitives;
@@ -57,145 +56,20 @@ where
     }
 }
 
-/// Builder for [Interpolator].
+/// Provides method for calculating natural neighbor interpolation.
 ///
-/// The value to be interpolated must implement [Lerpable].
+/// This includes:
+///  - Cloned point data
+///  - RTree structure to find the triangle as the origin of the boyer-watson envelope
+///  - Delaunay triangulation to construct the boyer-watson envelope for calculating the weight
 ///
-/// # Examples
-///
-/// ```
-/// use naturalneighbor::{Point, InterpolatorBuilder};
-///
-/// let points = [
-///     Point { x: 0.0, y: 0.0 },
-///     Point { x: 800.0, y: 0.0 },
-///     Point { x: 800.0, y: 800.0 },
-///     Point { x: 0.0, y: 800.0 },
-///     Point { x: 454.0, y: 223.0 },
-///     Point { x: 302.0, y: 345.0 },
-///     Point { x: 258.0, y: 632.0 },
-///     Point { x: 620.0, y: 513.0 },
-///     Point { x: 285.0, y: 479.0 },
-///     Point { x: 444.0, y: 453.0 },
-///     Point { x: 537.0, y: 315.0 },
-///     Point { x: 425.0, y: 610.0 },
-///     Point { x: 528.0, y: 223.0 },
-/// ];
-///
-/// // weights of the points to be interpolated
-/// let weights = [
-///     0.4, 0.9, 0.0, 0.7, 0.1, 0.3, 0.2, 0.4, 0.9, 0.0, 0.7, 0.8, 0.5,
-/// ];
-///
-/// let interpolator = InterpolatorBuilder::default()
-///     .set_points(&points)
-///     .set_values(&weights)
-///     .build()
-///     .unwrap();
-/// ```
-pub struct InterpolatorBuilder<'p, 'v, V>
-where
-    V: Lerpable,
-{
-    points: Option<&'p [Point]>,
-    values: Option<&'v [V]>,
-}
-
-impl<V> Default for InterpolatorBuilder<'_, '_, V>
-where
-    V: Lerpable,
-{
-    fn default() -> Self {
-        Self {
-            points: None,
-            values: None,
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum BuildError {
-    /// Points or/and values are not provided.
-    /// You need to call `set_points` and `set_values` before calling `build`.
-    #[error("points or/and values are not provided")]
-    PointsAndValuesNotProvided,
-
-    /// The number of points and values are not the same.
-    #[error("points and values are not the same length")]
-    PointsAndValuesNotSameLength,
-}
-
-impl<'p, 'v, V> InterpolatorBuilder<'p, 'v, V>
-where
-    V: Lerpable,
-{
-    /// Set the points.
-    pub fn set_points(&self, points: &'p [Point]) -> Self {
-        Self {
-            points: Some(points),
-            ..*self
-        }
-    }
-
-    /// Set the values assosiated to the points to be interpolated.
-    pub fn set_values(&self, values: &'v [V]) -> Self {
-        Self {
-            values: Some(values),
-            ..*self
-        }
-    }
-
-    /// Build [Interpolator].
-    ///
-    /// This may return None if the points and values are not provided or the number of points and values are not the same.
-    pub fn build(&self) -> Result<Interpolator<'p, 'v, V>, BuildError>
-    where
-        V: Lerpable,
-    {
-        if let (Some(points), Some(values)) = (self.points, self.values) {
-            if points.len() != values.len() {
-                return Err(BuildError::PointsAndValuesNotSameLength);
-            }
-
-            let triangulation = delaunator::triangulate(points);
-
-            let circumcircles = triangulation
-                .triangles
-                .chunks_exact(3)
-                .enumerate()
-                .map(|(t, _)| Triangle::from_triangle(points, &triangulation.triangles, t))
-                .collect::<Vec<_>>();
-
-            let rtree = rstar::RTree::bulk_load(circumcircles);
-
-            let interpolator = Interpolator {
-                points,
-                values,
-                triangles: triangulation.triangles,
-                harfedges: triangulation.halfedges,
-                tree: rtree,
-            };
-
-            return Ok(interpolator);
-        };
-
-        Err(BuildError::PointsAndValuesNotProvided)
-    }
-}
-
-/// Provides method for natural neighbor interpolation.
-///
-/// This includes some st
-///  - RTree to find the triangle that contains the point to be interpolated.
-///  - Delaunay triangulation to construct the boyer-watson envelope for calculating the weight.
-///
-/// Use `interpolate(&self, ptarget: Point)` to interpolate the value at the point.
+/// Use `interpolate(&self, values: &[V], ptarget: P)` to interpolate the value at the point.
 ///
 /// # Examples
 ///
 /// ```
 ///
-/// use naturalneighbor::{Point, InterpolatorBuilder};
+/// use naturalneighbor::{Point, Interpolator};
 ///
 /// let points = [
 ///     Point { x: 0.0, y: 0.0 },
@@ -209,13 +83,9 @@ where
 ///     1.0, 0.0, 1.0, 0.0
 /// ];
 ///
-/// let interpolator = InterpolatorBuilder::default()
-///     .set_points(&points)
-///     .set_values(&weights)
-///     .build()
-///     .unwrap();
+/// let interpolator = Interpolator::new(&points);
 ///
-/// let weight = interpolator.interpolate(Point {
+/// let weight = interpolator.interpolate(&weights, Point {
 ///     x: 50.0,
 ///     y: 50.0,
 /// }).unwrap();
@@ -223,34 +93,49 @@ where
 /// assert_eq!(weight, 0.5);
 ///
 /// ```
-pub struct Interpolator<'p, 'v, V>
-where
-    V: Lerpable,
-{
-    points: &'p [Point],
-    values: &'v [V],
+pub struct Interpolator {
+    points: Vec<Point>,
     triangles: Vec<usize>,
     harfedges: Vec<usize>,
     tree: rstar::RTree<Triangle>,
 }
 
-impl<'p, 'v, V> Interpolator<'p, 'v, V>
-where
-    V: Lerpable,
-{
-    // ebase: harfedge starting from base point
-    // eprev: previous harfedge of ebase
-    // enext: next harfedge of ebase
-    fn calculate_weight_area(
-        &self,
-        ptarget: &Point,
-        eprev: usize,
-        ebase: usize,
-        enext: usize,
-    ) -> f64 {
-        let point_prev: &Point = &self.points[self.triangles[eprev]];
-        let point_base = &self.points[self.triangles[ebase]];
-        let point_next: &Point = &self.points[self.triangles[enext]];
+impl Interpolator {
+    /// Create a new Interpolator from a slice of points.
+    ///
+    pub fn new<P>(points: &[P]) -> Self
+    where
+        P: Into<Point> + Clone,
+    {
+        let points = points
+            .iter()
+            .map(|p| (*p).clone().into())
+            .collect::<Vec<Point>>();
+
+        let triangulation = delaunator::triangulate(&points);
+
+        let circumcircles = triangulation
+            .triangles
+            .chunks_exact(3)
+            .enumerate()
+            .map(|(t, _)| Triangle::from_triangle(&points, &triangulation.triangles, t))
+            .collect::<Vec<_>>();
+
+        let rtree = rstar::RTree::bulk_load(circumcircles);
+
+        Self {
+            points,
+            triangles: triangulation.triangles,
+            harfedges: triangulation.halfedges,
+            tree: rtree,
+        }
+    }
+
+    // edges.0 -> edges.1 -> edges.2
+    fn calculate_weight_area(&self, ptarget: &Point, edges: (usize, usize, usize)) -> f64 {
+        let point_prev = &self.points[self.triangles[edges.0]];
+        let point_base = &self.points[self.triangles[edges.1]];
+        let point_next = &self.points[self.triangles[edges.2]];
 
         let mprev = &Point {
             x: (point_base.x + point_prev.x) / 2.,
@@ -261,7 +146,7 @@ where
             y: (point_base.y + point_next.y) / 2.,
         };
 
-        let mut ce = eprev;
+        let mut ce = edges.0;
 
         let pre = {
             let mut pre = 0.;
@@ -277,7 +162,7 @@ where
                 pre += (cs1.x - c.x) * (cs1.y + c.y);
                 cs1 = c;
                 let next = next_harfedge(ce);
-                if ebase == next {
+                if edges.1 == next {
                     break;
                 }
                 ce = self.harfedges[next];
@@ -299,39 +184,49 @@ where
     // value: the value to be weighted
     // weight_sum: tentative sum of the weight
     // ptarget: the point to be interpolated
-    // ebase: harfedge starting from base point
-    // eprev: previous harfedge of ebase
-    // enext: next harfedge of ebase
-    fn apply_weight(
+    // edges.0 -> edges.1 -> edges.2
+    fn apply_weight<V>(
         &self,
+        values: &[V],
         value: Option<V>,
         weight_sum: f64,
         ptarget: &Point,
-        eprev: usize,
-        ebase: usize,
-        enext: usize,
-    ) -> (Option<V>, f64) {
-        let v2 = &self.values[self.triangles[ebase]];
+        edges: (usize, usize, usize),
+    ) -> (Option<V>, f64)
+    where
+        V: Lerpable,
+    {
+        let vbase = &values[self.triangles[edges.1]];
 
-        let weight = self.calculate_weight_area(ptarget, eprev, ebase, enext);
+        let weight = self.calculate_weight_area(ptarget, edges);
         let weight_sum = weight_sum + weight;
 
         if let Some(value) = value {
-            (Some(value.lerp(v2, weight / weight_sum)), weight_sum)
+            (Some(value.lerp(vbase, weight / weight_sum)), weight_sum)
         } else {
-            (Some(v2.clone()), weight_sum)
+            (Some(vbase.clone()), weight_sum)
         }
     }
 
     /// Interpolate the value at the point.
-    /// If the point is outside the triangulation, None is returned.
-    pub fn interpolate(&self, ptarget: Point) -> Option<V> {
+    /// If the point is outside the triangulation or the number of points and values are not the same, None is returned.
+    pub fn interpolate<P, V>(&self, values: &[V], ptarget: P) -> Option<V>
+    where
+        P: Into<Point> + Clone,
+        V: Lerpable,
+    {
+        if self.points.len() != values.len() {
+            return None;
+        }
+
+        let ptarget = ptarget.into();
+
         // initial edge
         let start: usize = {
             let triangles = self
                 .tree
                 .locate_all_at_point(&[ptarget.x, ptarget.y])
-                .filter(|circle| circle.point_in_triangle(self.points, &self.triangles, &ptarget))
+                .filter(|circle| circle.point_in_triangle(&self.points, &self.triangles, &ptarget))
                 .collect::<Vec<_>>();
 
             if triangles.len() >= 3 {
@@ -350,7 +245,7 @@ where
                     ];
                     points.iter().enumerate().for_each(|(i, p)| {
                         if p.x == ptarget.x && p.y == ptarget.y {
-                            result = Some(self.values[triangle[i]].clone());
+                            result = Some(values[triangle[i]].clone());
                         }
                     });
                 });
@@ -370,13 +265,13 @@ where
         let mut value: Option<V> = None;
 
         // Stream of edges on the boyer-watson envelope.
-        // epool.0 -> epool.1 -> epool.2
-        // The result value is updated when all elements of epool are on the envelope.
-        let mut epool = (self.harfedges.len(), self.harfedges.len(), start);
+        // edges.0 -> edges.1 -> edges.2
+        // The result value is updated when all elements of edges are on the envelope.
+        let mut edges = (self.harfedges.len(), self.harfedges.len(), start);
 
         // the first and second edge of the envelope.
         // efirst2.0 -> efirst2.1
-        // In the first and second iteration, the result value is not calculated because some elements of epool is not on the envelope.
+        // In the first and second iteration, the result value is not calculated because some elements of edges is not on the envelope.
         // After the envelope is closed, the rest of the process is processed using efirst2.
         let mut efirst2 = None;
 
@@ -384,7 +279,7 @@ where
         let mut weight_sum = 0.;
 
         loop {
-            let opposite = self.harfedges[epool.2];
+            let opposite = self.harfedges[edges.2];
 
             // if the opposite harfedge of the earlist harfedge in the stream exists
             if opposite < self.harfedges.len() {
@@ -404,40 +299,37 @@ where
                 let dist2 = (c.x - ptarget.x).powi(2) + (c.y - ptarget.y).powi(2);
 
                 if dist2 < r2 {
-                    epool.2 = next_harfedge(opposite);
+                    edges.2 = next_harfedge(opposite);
                     continue;
                 }
             }
 
-            // if it is in the first iteration after all elements of epool are on the envelope
-            if epool.0 < self.harfedges.len() {
+            // if it is in the first iteration after all elements of edges are on the envelope
+            if edges.0 < self.harfedges.len() {
                 if efirst2.is_none() {
-                    efirst2 = Some((epool.0, epool.1));
+                    efirst2 = Some((edges.0, edges.1));
                 }
-                (value, weight_sum) =
-                    self.apply_weight(value, weight_sum, &ptarget, epool.0, epool.1, epool.2);
+                (value, weight_sum) = self.apply_weight(values, value, weight_sum, &ptarget, edges);
             }
 
-            // update epool
-            epool = (epool.1, epool.2, next_harfedge(epool.2));
+            // update edges
+            edges = (edges.1, edges.2, next_harfedge(edges.2));
 
             // if the envelope is closed
-            if self.triangles[start] == self.triangles[epool.2] {
+            if self.triangles[start] == self.triangles[edges.2] {
                 (value, weight_sum) = self.apply_weight(
+                    values,
                     value,
                     weight_sum,
                     &ptarget,
-                    epool.0,
-                    epool.1,
-                    efirst2.unwrap().0,
+                    (edges.0, edges.1, efirst2.unwrap().0),
                 );
                 (value, _) = self.apply_weight(
+                    values,
                     value,
                     weight_sum,
                     &ptarget,
-                    epool.1,
-                    efirst2.unwrap().0,
-                    efirst2.unwrap().1,
+                    (edges.1, efirst2.unwrap().0, efirst2.unwrap().1),
                 );
                 break;
             }

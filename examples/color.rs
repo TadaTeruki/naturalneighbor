@@ -1,5 +1,5 @@
 use image::{ImageBuffer, Rgb};
-use naturalneighbor::{InterpolatorBuilder, Lerpable, Point};
+use naturalneighbor::{Interpolator, Lerpable, Point};
 use rand::Rng;
 
 #[derive(Copy, Clone, Debug)]
@@ -78,30 +78,29 @@ fn main() {
     let mut img = ImageBuffer::from_pixel(img_w, img_h, Rgb([255 as u8, 255, 255]));
     let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_seed([0; 32]);
 
-    let points: Vec<Point> = (0..n)
+    let points = (0..n)
         .map(|_| Point {
             x: rng.gen::<f64>() * img_w as f64,
             y: rng.gen::<f64>() * img_h as f64,
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     let colors = (0..n)
         .map(|_| PALLETE[rng.gen::<usize>() % PALLETE.len()])
         .collect::<Vec<_>>();
 
-    let interpolator = InterpolatorBuilder::default()
-        .set_points(&points)
-        .set_values(&colors)
-        .build()
-        .unwrap();
+    let interpolator = Interpolator::new(&points);
 
     // Draw the interpolated colors on the image
     for x in 0..img_w {
         for y in 0..img_h {
-            let c = interpolator.interpolate(Point {
-                x: x as f64,
-                y: y as f64,
-            });
+            let c = interpolator.interpolate(
+                &colors,
+                Point {
+                    x: x as f64,
+                    y: y as f64,
+                },
+            );
 
             if let Some(c) = c {
                 img.put_pixel(x as u32, y as u32, c.to_rgb());
