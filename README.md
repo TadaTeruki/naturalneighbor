@@ -10,7 +10,9 @@ This libary is designed to be fast and memory efficient.
  - [rstar](https://crates.io/crates/rstar) for spatial indexing
  - Dynamic memory allocation is never used in the calculation
 
-TODO: Add benchmark results
+*TODO: Add benchmark results*
+
+This is a subproject for the [terrain-rs](https://github.com/TadaTeruki/terrain-rs).
 
 ## Installation
 
