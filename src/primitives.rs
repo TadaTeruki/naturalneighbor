@@ -8,6 +8,8 @@ pub(crate) struct Triangle {
     aabb: AABB<[f64; 2]>,
 }
 
+static EPS: f64 = f64::EPSILON;
+
 impl Triangle {
     pub fn itriangle(&self) -> usize {
         self.itriangle
@@ -35,7 +37,7 @@ impl Triangle {
 
         Self {
             itriangle: t,
-            aabb: AABB::from_corners([min_x, min_y], [max_x, max_y]),
+            aabb: AABB::from_corners([min_x - EPS, min_y - EPS], [max_x + EPS, max_y + EPS]),
         }
     }
 
@@ -55,8 +57,9 @@ impl Triangle {
             * (p1.y * p3.x - p1.x * p3.y + (p3.y - p1.y) * point.x + (p1.x - p3.x) * point.y);
         let t = 1.0 / area2
             * (p1.x * p2.y - p1.y * p2.x + (p1.y - p2.y) * point.x + (p2.x - p1.x) * point.y);
+        let u = 1.0 - s - t;
 
-        s >= 0.0 && t >= 0.0 && 1.0 - s - t >= 0.0
+        s >= -EPS && t >= -EPS && u >= -EPS
     }
 }
 

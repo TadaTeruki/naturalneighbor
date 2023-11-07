@@ -238,14 +238,10 @@ impl Interpolator {
                         self.triangles[it * 3 + 1],
                         self.triangles[it * 3 + 2],
                     ];
-                    let points = [
-                        &self.points[triangle[0]],
-                        &self.points[triangle[1]],
-                        &self.points[triangle[2]],
-                    ];
-                    points.iter().enumerate().for_each(|(i, p)| {
-                        if p.x == ptarget.x && p.y == ptarget.y {
-                            result = Some(values[triangle[i]].clone());
+
+                    triangle.iter().for_each(|i| {
+                        if self.points[*i].x == ptarget.x && self.points[*i].y == ptarget.y {
+                            result = Some(values[*i].clone());
                         }
                     });
                 });
