@@ -1,9 +1,20 @@
 use crate::Point;
 
+pub(crate) fn triangle_is_too_steep(triangle: &[&Point; 3]) -> bool {
+    let p1 = triangle[0];
+    let p2 = triangle[1];
+    let p3 = triangle[2];
+
+    let eps = f32::EPSILON as f64;
+
+    ((p1.x - p2.x).abs() < eps && (p2.x - p3.x).abs() < eps)
+        || ((p1.y - p2.y).abs() < eps && (p2.y - p3.y).abs() < eps)
+}
+
 pub(crate) fn circumcenter(triangle: &[&Point; 3]) -> Point {
-    let p1 = &triangle[0];
-    let p2 = &triangle[1];
-    let p3 = &triangle[2];
+    let p1 = triangle[0];
+    let p2 = triangle[1];
+    let p3 = triangle[2];
     let d = 2.0 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
     let ux = ((p1.x * p1.x + p1.y * p1.y) * (p2.y - p3.y)
         + (p2.x * p2.x + p2.y * p2.y) * (p3.y - p1.y)
@@ -18,7 +29,7 @@ pub(crate) fn circumcenter(triangle: &[&Point; 3]) -> Point {
 }
 
 pub(crate) fn circumcircle_with_radius_2(triangle: &[&Point; 3]) -> (Point, f64) {
-    let p1 = &triangle[0];
+    let p1 = triangle[0];
     let circumcenter = circumcenter(triangle);
     let circumradius2 = (p1.x - circumcenter.x).powi(2) + (p1.y - circumcenter.y).powi(2);
 

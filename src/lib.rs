@@ -4,7 +4,7 @@
 //!
 //! The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
 use primitives::Triangle;
-use util::{circumcenter, circumcircle_with_radius_2, next_harfedge};
+use util::{circumcenter, circumcircle_with_radius_2, next_harfedge, triangle_is_too_steep};
 
 mod primitives;
 mod util;
@@ -275,30 +275,40 @@ impl Interpolator {
         let mut weight_sum = 0.;
 
         loop {
-            let opposite = self.harfedges[edges.2];
+            edges.2 = {
+                let mut edge2 = edges.2;
+                loop {
+                    let opposite = self.harfedges[edge2];
 
-            // if the opposite harfedge of the earlist harfedge in the stream exists
-            if opposite < self.harfedges.len() {
-                let oit = opposite / 3;
-                let triangle = [
-                    self.triangles[oit * 3],
-                    self.triangles[oit * 3 + 1],
-                    self.triangles[oit * 3 + 2],
-                ];
-                // circumcicle of the triangle
-                let (c, r2) = circumcircle_with_radius_2(&[
-                    &self.points[triangle[0]],
-                    &self.points[triangle[1]],
-                    &self.points[triangle[2]],
-                ]);
-                // check if the point is in the circumcircle
-                let dist2 = (c.x - ptarget.x).powi(2) + (c.y - ptarget.y).powi(2);
+                    // if the opposite is not found (the triangle is on the edge of the triangulation), break the loop.
+                    if opposite >= self.harfedges.len() {
+                        break edge2;
+                    }
 
-                if dist2 < r2 {
-                    edges.2 = next_harfedge(opposite);
-                    continue;
+                    let oit = opposite / 3;
+                    let triangle_points = [
+                        &self.points[self.triangles[oit * 3]],
+                        &self.points[self.triangles[oit * 3 + 1]],
+                        &self.points[self.triangles[oit * 3 + 2]],
+                    ];
+
+                    // if the triangle is too steep, it should be ignored.
+                    if triangle_is_too_steep(&triangle_points) {
+                        break edge2;
+                    }
+
+                    // circumcicle of the triangle
+                    let (c, r2) = circumcircle_with_radius_2(&triangle_points);
+
+                    // check if the point is in the circumcircle
+                    let dist2 = (c.x - ptarget.x).powi(2) + (c.y - ptarget.y).powi(2);
+                    if dist2 < r2 {
+                        edge2 = next_harfedge(opposite);
+                    } else {
+                        break edge2;
+                    }
                 }
-            }
+            };
 
             // if it is in the first iteration after all elements of edges are on the envelope
             if edges.0 < self.harfedges.len() {
