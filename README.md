@@ -12,7 +12,7 @@ This libary is designed to be fast and memory efficient.
 
 *TODO: Add benchmark results*
 
-This is a subproject for the [terrain-rs](https://github.com/TadaTeruki/terrain-rs).
+This is a subproject for the [fastlem](https://github.com/TadaTeruki/fastlem).
 
 ## Installation
 
