@@ -3,6 +3,7 @@
 //! `naturalneighbor` is a library to provide 2D Natural Neighbor Interpolation (NNI) for Rust.
 //!
 //! The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
+
 use primitives::Triangle;
 use util::{circumcenter, circumcircle_with_radius_2, next_harfedge, triangle_is_too_steep};
 
@@ -181,44 +182,15 @@ impl Interpolator {
         pre - post
     }
 
-    // value: the value to be weighted
-    // weight_sum: tentative sum of the weight
-    // ptarget: the point to be interpolated
-    // edges.0 -> edges.1 -> edges.2
-    fn apply_weight<V>(
-        &self,
-        values: &[V],
-        value: Option<V>,
-        weight_sum: f64,
-        ptarget: &Point,
-        edges: (usize, usize, usize),
-    ) -> (Option<V>, f64)
-    where
-        V: Lerpable,
-    {
-        let vbase = &values[self.triangles[edges.1]];
-
-        let weight = self.calculate_weight_area(ptarget, edges);
-        let weight_sum = weight_sum + weight;
-
-        if let Some(value) = value {
-            (Some(value.lerp(vbase, weight / weight_sum)), weight_sum)
-        } else {
-            (Some(vbase.clone()), weight_sum)
-        }
-    }
-
-    /// Interpolate the value at the point.
-    /// If the point is outside the triangulation or the number of points and values are not the same, None is returned.
-    pub fn interpolate<P, V>(&self, values: &[V], ptarget: P) -> Option<V>
+    /// Perform natural neighbor interpolation.
+    ///
+    /// The 'apply_weight' function is called if the point is iterated as one of the natural neighbors.
+    /// The first argument is the index of the point, the second argument is the weight of the point, and the third argument is the tentative sum of the weight.
+    /// See the implementation of `Interpolator::interpolate` as an example.
+    fn perform_interpoation<P>(&self, ptarget: P, apply_weight: &mut impl FnMut(usize, f64, f64))
     where
         P: Into<Point> + Clone,
-        V: Lerpable,
     {
-        if self.points.len() != values.len() {
-            return None;
-        }
-
         let ptarget = ptarget.into();
 
         // initial edge
@@ -230,7 +202,7 @@ impl Interpolator {
                 .collect::<Vec<_>>();
 
             if triangles.len() >= 3 {
-                let mut result = None;
+                let mut early_return = false;
                 triangles.iter().for_each(|t| {
                     let it = t.itriangle();
                     let triangle = [
@@ -241,25 +213,22 @@ impl Interpolator {
 
                     triangle.iter().for_each(|i| {
                         if self.points[*i].x == ptarget.x && self.points[*i].y == ptarget.y {
-                            result = Some(values[*i].clone());
+                            apply_weight(*i, 1.0, 1.0);
+                            early_return = true;
                         }
                     });
                 });
-                if let Some(result) = result {
-                    return Some(result);
+                if early_return {
+                    return;
                 }
             }
 
             if let Some(t) = triangles.get(0) {
                 t.itriangle() * 3
             } else {
-                return None;
+                return;
             }
         };
-
-        // The value to be returned.
-        let mut value: Option<V> = None;
-
         // Stream of edges on the boyer-watson envelope.
         // edges.0 -> edges.1 -> edges.2
         // The result value is updated when all elements of edges are on the envelope.
@@ -273,6 +242,14 @@ impl Interpolator {
 
         // the tentative sum of the weight.
         let mut weight_sum = 0.;
+
+        // apply the weight.
+        let mut apply = |edges: (usize, usize, usize), weight_sum: f64| -> f64 {
+            let weight = self.calculate_weight_area(&ptarget, edges);
+            let weight_sum = weight_sum + weight;
+            apply_weight(self.triangles[edges.1], weight, weight_sum);
+            weight_sum
+        };
 
         loop {
             edges.2 = {
@@ -315,7 +292,7 @@ impl Interpolator {
                 if efirst2.is_none() {
                     efirst2 = Some((edges.0, edges.1));
                 }
-                (value, weight_sum) = self.apply_weight(values, value, weight_sum, &ptarget, edges);
+                weight_sum = apply((edges.0, edges.1, edges.2), weight_sum);
             }
 
             // update edges
@@ -323,23 +300,37 @@ impl Interpolator {
 
             // if the envelope is closed
             if self.triangles[start] == self.triangles[edges.2] {
-                (value, weight_sum) = self.apply_weight(
-                    values,
-                    value,
-                    weight_sum,
-                    &ptarget,
-                    (edges.0, edges.1, efirst2.unwrap().0),
-                );
-                (value, _) = self.apply_weight(
-                    values,
-                    value,
-                    weight_sum,
-                    &ptarget,
+                weight_sum = apply((edges.0, edges.1, efirst2.unwrap().0), weight_sum);
+                apply(
                     (edges.1, efirst2.unwrap().0, efirst2.unwrap().1),
+                    weight_sum,
                 );
                 break;
             }
         }
+    }
+
+    /// Interpolate the value at the point.
+    /// If the point is outside the triangulation or the number of points and values are not the same, None is returned.
+    pub fn interpolate<P, V>(&self, values: &[V], ptarget: P) -> Option<V>
+    where
+        P: Into<Point> + Clone,
+        V: Lerpable,
+    {
+        if self.points.len() != values.len() {
+            return None;
+        }
+
+        let mut value: Option<V> = None;
+        self.perform_interpoation::<P>(ptarget, &mut |i, weight, weight_sum| {
+            let vbase = &values[i];
+            let new_value = if let Some(value) = &value {
+                Some(value.lerp(vbase, weight / weight_sum))
+            } else {
+                Some(vbase.clone())
+            };
+            value = new_value;
+        });
 
         value
     }
