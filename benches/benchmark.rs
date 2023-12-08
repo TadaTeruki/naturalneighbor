@@ -5,11 +5,12 @@ use rand::Rng;
 
 fn benchmark(c: &mut Criterion) {
     let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_seed([0; 32]);
-    let n = 1000;
+    let n = 10000;
+    let bound = 1000.0;
     let points = (0..n)
         .map(|_| Point {
-            x: rng.gen::<f64>() * 1000.0,
-            y: rng.gen::<f64>() * 1000.0,
+            x: rng.gen::<f64>() * bound,
+            y: rng.gen::<f64>() * bound,
         })
         .collect::<Vec<_>>();
 
@@ -20,17 +21,13 @@ fn benchmark(c: &mut Criterion) {
 
     c.bench_function("interpolate", |b| {
         b.iter(|| {
-            for x in 0..100 {
-                for y in 0..100 {
-                    let _ = interpolator.interpolate(
-                        &weights,
-                        Point {
-                            x: x as f64,
-                            y: y as f64,
-                        },
-                    );
-                }
-            }
+            let _ = interpolator.interpolate(
+                &weights,
+                Point {
+                    x: bound / 2.0,
+                    y: bound / 2.0,
+                },
+            );
         })
     });
 

@@ -5,13 +5,6 @@
 The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](
 https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
 
-This libary is designed to be fast and memory efficient.
- - [delaunator](https://crates.io/crates/delaunator) for delaunay triangulation
- - [rstar](https://crates.io/crates/rstar) for spatial indexing
- - Dynamic memory allocation is never used in the calculation
-
-*TODO: Add benchmark results*
-
 This is a subproject for the [fastlem](https://github.com/TadaTeruki/fastlem).
 
 ## Installation
@@ -20,6 +13,23 @@ This is a subproject for the [fastlem](https://github.com/TadaTeruki/fastlem).
 [dependencies]
 naturalneighbor = "1.1"
 ```
+
+## Benchmark
+
+Benchmarking is available with [criterion](https://crates.io/crates/criterion).
+```
+$ cargo bench
+```
+
+### Result
+
+Estimated time for 2D NNI with 1000, 10000, and 100000 sites.
+
+CPU: 11th Gen Intel i7-11390H (8) @ 5.000GHz
+
+||N=1000|N=10000|N=100000|
+|:---|:---:|:---:|:---:|
+|Estimated time|508.57 ns|934.85 ns|1.1361 µs|
 
 ## Usage
 
