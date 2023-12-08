@@ -40,7 +40,6 @@ pub type Point = delaunator::Point;
 ///     }
 /// }
 /// ```
-
 pub trait Lerpable: Clone {
     /// Apply linear interpolation with weight (0.0-1.0).
     fn lerp(&self, other: &Self, weight: f64) -> Self;
@@ -65,11 +64,11 @@ where
 ///  - Delaunay triangulation to construct the boyer-watson envelope for calculating the weight
 ///
 /// Use `interpolate(&self, values: &[V], ptarget: P)` to interpolate the value at the point.
+/// Use `query_weights(&self, ptarget: P)` to query the result of the interpolation as a list of indices of sites to be weighted.
 ///
 /// # Examples
 ///
 /// ```
-///
 /// use naturalneighbor::{Point, Interpolator};
 ///
 /// let points = [
@@ -79,20 +78,28 @@ where
 ///     Point { x: 0.0, y: 100.0 },
 /// ];
 ///
-/// // weights of the points to be interpolated
-/// let weights = [
+/// // values of the points to be interpolated
+/// let values = [
 ///     1.0, 0.0, 1.0, 0.0
 /// ];
 ///
 /// let interpolator = Interpolator::new(&points);
 ///
-/// let weight = interpolator.interpolate(&weights, Point {
+/// let value = interpolator.interpolate(&values, Point {
 ///     x: 50.0,
 ///     y: 50.0,
 /// }).unwrap();
 ///
-/// assert_eq!(weight, 0.5);
+/// assert_eq!(value, 0.5);
 ///
+/// let mut value_and_weight = interpolator.query_weights(Point {
+///    x: 50.0,
+///    y: 50.0,
+/// }).unwrap();
+///
+/// value_and_weight.sort_by_key(|(i, _)| *i);
+/// assert_eq!(value_and_weight, vec![(0, 0.25), (1, 0.25), (2, 0.25), (3, 0.25)]);
+/// assert_eq!(value_and_weight.iter().map(|(i, w)| values[*i] * w).sum::<f64>(), 0.5);
 /// ```
 pub struct Interpolator {
     points: Vec<Point>,
@@ -103,7 +110,6 @@ pub struct Interpolator {
 
 impl Interpolator {
     /// Create a new Interpolator from a slice of points.
-    ///
     pub fn new<P>(points: &[P]) -> Self
     where
         P: Into<Point> + Clone,
