@@ -23,7 +23,7 @@ $ cargo bench
 
 ### Result
 
-Estimated time for 2D NNI with 1000, 10000, and 100000 sites.
+Estimated time per 1 interpolation for 2D NNI with 1000, 10000, and 100000 sites.
 
 CPU: 11th Gen Intel i7-11390H (8) @ 5.000GHz
 
