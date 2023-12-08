@@ -241,14 +241,14 @@ impl Interpolator {
         let mut efirst2 = None;
 
         // the tentative sum of the weight.
-        let mut weight_sum = 0.;
+        let mut tmp_weight_sum = 0.;
 
         // apply the weight.
-        let mut apply = |edges: (usize, usize, usize), weight_sum: f64| -> f64 {
+        let mut apply = |edges: (usize, usize, usize), tmp_weight_sum: f64| -> f64 {
             let weight = self.calculate_weight_area(&ptarget, edges);
-            let weight_sum = weight_sum + weight;
-            apply_weight(self.triangles[edges.1], weight, weight_sum);
-            weight_sum
+            let tmp_weight_sum = tmp_weight_sum + weight;
+            apply_weight(self.triangles[edges.1], weight, tmp_weight_sum);
+            tmp_weight_sum
         };
 
         loop {
@@ -292,7 +292,7 @@ impl Interpolator {
                 if efirst2.is_none() {
                     efirst2 = Some((edges.0, edges.1));
                 }
-                weight_sum = apply((edges.0, edges.1, edges.2), weight_sum);
+                tmp_weight_sum = apply((edges.0, edges.1, edges.2), tmp_weight_sum);
             }
 
             // update edges
@@ -300,10 +300,10 @@ impl Interpolator {
 
             // if the envelope is closed
             if self.triangles[start] == self.triangles[edges.2] {
-                weight_sum = apply((edges.0, edges.1, efirst2.unwrap().0), weight_sum);
+                tmp_weight_sum = apply((edges.0, edges.1, efirst2.unwrap().0), tmp_weight_sum);
                 apply(
                     (edges.1, efirst2.unwrap().0, efirst2.unwrap().1),
-                    weight_sum,
+                    tmp_weight_sum,
                 );
                 break;
             }
@@ -322,10 +322,10 @@ impl Interpolator {
         }
 
         let mut value: Option<V> = None;
-        self.perform_interpoation::<P>(ptarget, &mut |i, weight, weight_sum| {
+        self.perform_interpoation::<P>(ptarget, &mut |i, weight, tmp_weight_sum| {
             let vbase = &values[i];
             let new_value = if let Some(value) = &value {
-                Some(value.lerp(vbase, weight / weight_sum))
+                Some(value.lerp(vbase, weight / tmp_weight_sum))
             } else {
                 Some(vbase.clone())
             };
@@ -333,5 +333,25 @@ impl Interpolator {
         });
 
         value
+    }
+
+    /// Query the result of the interpolation as a list of indices of sites to be weighted.
+    /// If the point is outside the triangulation, None is returned.
+    pub fn query_weights<P>(&self, ptarget: P) -> Option<Vec<(usize, f64)>>
+    where
+        P: Into<Point> + Clone,
+    {
+        let mut weights = Vec::new();
+        let mut weight_sum = 0.;
+        self.perform_interpoation::<P>(ptarget, &mut |i, weight, _| {
+            weight_sum += weight;
+            weights.push((i, weight));
+        });
+
+        if weight_sum == 0. {
+            None
+        } else {
+            Some(weights.iter().map(|(i, w)| (*i, w / weight_sum)).collect())
+        }
     }
 }

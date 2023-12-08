@@ -1,6 +1,5 @@
-
 use criterion::{criterion_group, criterion_main, Criterion};
-use naturalneighbor::{Point, Interpolator};
+use naturalneighbor::{Interpolator, Point};
 use rand::Rng;
 
 fn benchmark(c: &mut Criterion) {
@@ -14,9 +13,7 @@ fn benchmark(c: &mut Criterion) {
         })
         .collect::<Vec<_>>();
 
-    let weights = (0..n)
-        .map(|_| rng.gen::<f64>())
-        .collect::<Vec<_>>();
+    let weights = (0..n).map(|_| rng.gen::<f64>()).collect::<Vec<_>>();
     let interpolator = Interpolator::new(&points);
 
     c.bench_function("interpolate", |b| {
@@ -30,9 +27,7 @@ fn benchmark(c: &mut Criterion) {
             );
         })
     });
-
 }
 
 criterion_group!(benches, benchmark);
 criterion_main!(benches);
-
