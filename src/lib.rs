@@ -3,7 +3,11 @@
 //! `naturalneighbor` is a library to provide 2D Natural Neighbor Interpolation (NNI) for Rust.
 //!
 //! The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
-
+//!
+//! ## Documentation
+//!
+//! See the [Interpolator] struct for the main documentation of this crate.
+//!
 use primitives::Triangle;
 use thiserror::Error;
 use util::{circumcenter, circumcircle_with_radius_2, next_harfedge};
@@ -19,9 +23,8 @@ pub type Point = delaunator::Point;
 /// The value to be interpolated must implement this trait.
 /// `f64` implements this trait by default.
 ///
-/// # Examples
+/// # Example
 /// ```
-///
 /// use naturalneighbor::Lerpable;
 ///
 /// #[derive(Copy, Clone, Debug)]
@@ -67,7 +70,7 @@ where
 /// Use `interpolate(&self, values: &[V], ptarget: P)` to interpolate the value at the point.
 /// Use `query_weights(&self, ptarget: P)` to query the result of the interpolation as a list of indices of sites to be weighted.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// use naturalneighbor::{Point, Interpolator};
@@ -79,6 +82,7 @@ where
 ///   };
 /// }
 ///
+/// // Pairs of points and values to be interpolated.
 /// let points = [
 ///     Point { x: 0.0, y: 0.0 },
 ///     Point { x: 100.0, y: 0.0 },
@@ -86,13 +90,14 @@ where
 ///     Point { x: 0.0, y: 100.0 },
 /// ];
 ///
-/// // values of the points to be interpolated
 /// let values = [
 ///     1.0, 0.0, 1.0, 0.0
 /// ];
 ///
+/// // Create an interpolator from the points.
 /// let interpolator = Interpolator::new(&points);
 ///
+/// // Calculate the value at the point.
 /// let value = interpolator.interpolate(&values, Point {
 ///     x: 50.0,
 ///     y: 50.0,
@@ -100,6 +105,7 @@ where
 ///
 /// assert_approx_eq!(value, 0.5);
 ///
+/// // Query the result of the interpolation as a list of indices of sites to be weighted.
 /// let mut value_and_weight = interpolator.query_weights(Point {
 ///    x: 50.0,
 ///    y: 50.0,
@@ -118,10 +124,10 @@ pub struct Interpolator {
     degree_limitation: usize,
 }
 
-// The epsiron value for the Interpolator.
-// This is for slightly moving the point if the point is on the edge of the triangulation
+// The epsiron value for the interpolator.
+// This is used to move the point slightly when the point is on the edge of the triangulation.
 // because calculating the weight of the point on the edge is not stable.
-// This value must be larger tha primitives::EPS_TRIANGLE.
+// This value must be greater than primitives::EPS_TRIANGLE.
 static EPS_INTERPOLATOR: f64 = 1e-12;
 
 // The default degree limitation of the interpolator.

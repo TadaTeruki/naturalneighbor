@@ -57,9 +57,7 @@ $ cargo run --example color
 
 Contributions are welcome. 
 
-The author is not a native English speaker. Please let me know if you find any grammatical errors in the documentation.
-
-Please also feel free to open an issue or pull request if you have any problems or suggestions.
+Feel free to open an issue or pull request if you have any problems or suggestions.
 
 ## License
 
