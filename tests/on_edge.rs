@@ -51,13 +51,20 @@ fn on_edge() {
         .collect::<Vec<_>>();
 
     for i in 0..test_n {
-        let value = interpolator.interpolate(
-            &values,
-            Point {
-                x: test_points[i].x,
-                y: test_points[i].y,
-            },
-        );
+        let value = interpolator
+            .interpolate(
+                &values,
+                Point {
+                    x: test_points[i].x,
+                    y: test_points[i].y,
+                },
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to interpolate {:?} with error {:?}",
+                    test_points[i], e
+                )
+            });
         if let Some(value) = value {
             let estimated_floor =
                 test_points[i].y.floor() * bound as f64 + test_points[i].x.floor();
@@ -72,7 +79,7 @@ fn on_edge() {
             );
             assert_approx_eq!(value, estimated);
         } else {
-            assert!(false);
+            panic!("Failed to interpolate {:?}", test_points[i]);
         }
     }
 }

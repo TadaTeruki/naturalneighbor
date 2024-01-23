@@ -5,6 +5,7 @@
 //! The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
 
 use primitives::Triangle;
+use thiserror::Error;
 use util::{circumcenter, circumcircle_with_radius_2, next_harfedge};
 
 mod primitives;
@@ -95,14 +96,14 @@ where
 /// let value = interpolator.interpolate(&values, Point {
 ///     x: 50.0,
 ///     y: 50.0,
-/// }).unwrap();
+/// }).unwrap().unwrap();
 ///
 /// assert_approx_eq!(value, 0.5);
 ///
 /// let mut value_and_weight = interpolator.query_weights(Point {
 ///    x: 50.0,
 ///    y: 50.0,
-/// }).unwrap();
+/// }).unwrap().unwrap();
 ///
 /// for (i, w) in value_and_weight.iter() {
 ///    assert_approx_eq!(*w, 0.25);
@@ -114,6 +115,7 @@ pub struct Interpolator {
     triangles: Vec<usize>,
     harfedges: Vec<usize>,
     tree: rstar::RTree<Triangle>,
+    degree_limitation: usize,
 }
 
 // The epsiron value for the Interpolator.
@@ -121,6 +123,20 @@ pub struct Interpolator {
 // because calculating the weight of the point on the edge is not stable.
 // This value must be larger tha primitives::EPS_TRIANGLE.
 static EPS_INTERPOLATOR: f64 = 1e-12;
+
+// The default degree limitation of the interpolator.
+static DEFAULT_DEGREE_LIMITATION: usize = 30;
+
+#[derive(Error, Debug)]
+pub enum InterpolatorError {
+    /// This error occurs when the number of neighbors of the point is higher than the degree limitation of the interpolator.
+    /// This error is for preventing the interpolator from running infinitely.
+    /// You can customize the degree limitation by using Interpolator::new_with_curtom_degree_limitation instead of Interpolator::new.
+    #[error("A site with too many neighbors is detected. The number of neighbors the is higher than the degree limitation of the interpolator({0}).")]
+    TooManyNeighbors(usize),
+    #[error("The number of points and values are not the same.")]
+    DifferentNumberOfPointsAndValues,
+}
 
 impl Interpolator {
     /// Create a new Interpolator from a slice of points.
@@ -149,11 +165,30 @@ impl Interpolator {
             triangles: triangulation.triangles,
             harfedges: triangulation.halfedges,
             tree: rtree,
+            degree_limitation: DEFAULT_DEGREE_LIMITATION,
         }
     }
 
+    /// Create a new Interpolator from a slice of points with degree limitation.
+    pub fn new_with_curtom_degree_limitation<P>(points: &[P], degree_limitation: usize) -> Self
+    where
+        P: Into<Point> + Clone,
+    {
+        let mut interpolator = Self::new(points);
+        interpolator.degree_limitation = degree_limitation;
+        interpolator
+    }
+
+    fn detect_too_large_degree(&self, dct: usize) -> bool {
+        dct >= self.degree_limitation - 1
+    }
+
     // edges.0 -> edges.1 -> edges.2
-    fn calculate_weight_area(&self, ptarget: &Point, edges: (usize, usize, usize)) -> f64 {
+    fn calculate_weight_area(
+        &self,
+        ptarget: &Point,
+        edges: (usize, usize, usize),
+    ) -> Result<f64, InterpolatorError> {
         let point_prev = &self.points[self.triangles[edges.0]];
         let point_base = &self.points[self.triangles[edges.1]];
         let point_next = &self.points[self.triangles[edges.2]];
@@ -172,7 +207,7 @@ impl Interpolator {
         let pre = {
             let mut pre = 0.;
             let mut cs1 = mprev.clone();
-            loop {
+            for dcount in 0..self.degree_limitation {
                 let cit = ce / 3;
                 let triangle = [
                     &self.points[self.triangles[cit * 3]],
@@ -187,6 +222,10 @@ impl Interpolator {
                     break;
                 }
                 ce = self.harfedges[next];
+
+                if self.detect_too_large_degree(dcount) {
+                    return Err(InterpolatorError::TooManyNeighbors(self.degree_limitation));
+                }
             }
             pre + (cs1.x - mnext.x) * (cs1.y + mnext.y) + (mnext.x - mprev.x) * (mnext.y + mprev.y)
         };
@@ -199,7 +238,7 @@ impl Interpolator {
             + (gnext.x - mnext.x) * (gnext.y + mnext.y)
             + (mnext.x - mprev.x) * (mnext.y + mprev.y);
 
-        pre - post
+        Ok(pre - post)
     }
 
     fn fit_in_triangle(&self, ptarget: &Point, check_around: bool) -> Option<(usize, Point)> {
@@ -258,7 +297,11 @@ impl Interpolator {
     /// The 'apply_weight' function is called if the point is iterated as one of the natural neighbors.
     /// The first argument is the index of the point, the second argument is the weight of the point, and the third argument is the tentative sum of the weight.
     /// See the implementation of `Interpolator::interpolate` as an example.
-    fn perform_interpoation<P>(&self, ptarget: P, apply_weight: &mut impl FnMut(usize, f64, f64))
+    fn perform_interpoation<P>(
+        &self,
+        ptarget: P,
+        apply_weight: &mut impl FnMut(usize, f64, f64),
+    ) -> Result<(), InterpolatorError>
     where
         P: Into<Point> + Clone,
     {
@@ -268,7 +311,7 @@ impl Interpolator {
         let (start, ptarget) = if let Some(t) = self.fit_in_triangle(&ptarget, true) {
             t
         } else {
-            return;
+            return Ok(());
         };
 
         // Stream of edges on the boyer-watson envelope.
@@ -286,22 +329,23 @@ impl Interpolator {
         let mut tmp_weight_sum = 0.;
 
         // apply the weight.
-        let mut apply = |edges: (usize, usize, usize), tmp_weight_sum: f64| -> f64 {
-            let weight = self.calculate_weight_area(&ptarget, edges);
-            let tmp_weight_sum: f64 = tmp_weight_sum + weight;
-            apply_weight(self.triangles[edges.1], weight, tmp_weight_sum);
-            tmp_weight_sum
-        };
+        let mut apply =
+            |edges: (usize, usize, usize), tmp_weight_sum: f64| -> Result<f64, InterpolatorError> {
+                let weight = self.calculate_weight_area(&ptarget, edges)?;
+                let tmp_weight_sum: f64 = tmp_weight_sum + weight;
+                apply_weight(self.triangles[edges.1], weight, tmp_weight_sum);
+                Ok(tmp_weight_sum)
+            };
 
-        loop {
+        for dcount in 0..self.degree_limitation {
             edges.2 = {
                 let mut edge2 = edges.2;
-                loop {
+                for dcount in 0..self.degree_limitation {
                     let opposite = self.harfedges[edge2];
 
                     // if the opposite is not found (the triangle is on the edge of the triangulation), break the loop.
                     if opposite >= self.harfedges.len() {
-                        break edge2;
+                        break;
                     }
 
                     let oit = opposite / 3;
@@ -319,9 +363,14 @@ impl Interpolator {
                     if dist2 < r2 {
                         edge2 = next_harfedge(opposite);
                     } else {
-                        break edge2;
+                        break;
+                    }
+
+                    if self.detect_too_large_degree(dcount) {
+                        return Err(InterpolatorError::TooManyNeighbors(self.degree_limitation));
                     }
                 }
+                edge2
             };
 
             // if it is in the first iteration after all elements of edges are on the envelope
@@ -329,7 +378,7 @@ impl Interpolator {
                 if efirst2.is_none() {
                     efirst2 = Some((edges.0, edges.1));
                 }
-                tmp_weight_sum = apply((edges.0, edges.1, edges.2), tmp_weight_sum);
+                tmp_weight_sum = apply((edges.0, edges.1, edges.2), tmp_weight_sum)?;
             }
 
             // update edges
@@ -337,25 +386,34 @@ impl Interpolator {
 
             // if the envelope is closed
             if self.triangles[start] == self.triangles[edges.2] {
-                tmp_weight_sum = apply((edges.0, edges.1, efirst2.unwrap().0), tmp_weight_sum);
+                tmp_weight_sum = apply((edges.0, edges.1, efirst2.unwrap().0), tmp_weight_sum)?;
                 apply(
                     (edges.1, efirst2.unwrap().0, efirst2.unwrap().1),
                     tmp_weight_sum,
-                );
+                )?;
                 break;
             }
+
+            if self.detect_too_large_degree(dcount) {
+                return Err(InterpolatorError::TooManyNeighbors(self.degree_limitation));
+            }
         }
+        Ok(())
     }
 
     /// Interpolate the value at the point.
-    /// If the point is outside the triangulation or the number of points and values are not the same, None is returned.
-    pub fn interpolate<P, V>(&self, values: &[V], ptarget: P) -> Option<V>
+    /// If the point is outside the triangulation, None is returned.
+    pub fn interpolate<P, V>(
+        &self,
+        values: &[V],
+        ptarget: P,
+    ) -> Result<Option<V>, InterpolatorError>
     where
         P: Into<Point> + Clone,
         V: Lerpable,
     {
         if self.points.len() != values.len() {
-            return None;
+            return Err(InterpolatorError::DifferentNumberOfPointsAndValues);
         }
 
         let mut value: Option<V> = None;
@@ -367,14 +425,17 @@ impl Interpolator {
                 Some(vbase.clone())
             };
             value = new_value;
-        });
+        })?;
 
-        value
+        Ok(value)
     }
 
     /// Query the result of the interpolation as a list of indices of sites to be weighted.
     /// If the point is outside the triangulation, None is returned.
-    pub fn query_weights<P>(&self, ptarget: P) -> Option<Vec<(usize, f64)>>
+    pub fn query_weights<P>(
+        &self,
+        ptarget: P,
+    ) -> Result<Option<Vec<(usize, f64)>>, InterpolatorError>
     where
         P: Into<Point> + Clone,
     {
@@ -383,12 +444,14 @@ impl Interpolator {
         self.perform_interpoation::<P>(ptarget, &mut |i, weight, _| {
             weight_sum += weight;
             weights.push((i, weight));
-        });
+        })?;
 
         if weight_sum == 0. {
-            None
+            Ok(None)
         } else {
-            Some(weights.iter().map(|(i, w)| (*i, w / weight_sum)).collect())
+            Ok(Some(
+                weights.iter().map(|(i, w)| (*i, w / weight_sum)).collect(),
+            ))
         }
     }
 }

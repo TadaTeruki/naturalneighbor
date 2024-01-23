@@ -4,7 +4,7 @@ use rand::Rng;
 
 fn benchmark(c: &mut Criterion) {
     let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_seed([0; 32]);
-    let n = 10000;
+    let n = 100000;
     let bound = 1000.0;
     let points = (0..n)
         .map(|_| Point {

@@ -90,17 +90,18 @@ fn main() {
         .collect::<Vec<_>>();
 
     let interpolator = Interpolator::new(&points);
-
     // Draw the interpolated colors on the image
     for x in 0..img_w {
         for y in 0..img_h {
-            let c = interpolator.interpolate(
-                &colors,
-                Point {
-                    x: x as f64,
-                    y: y as f64,
-                },
-            );
+            let c = interpolator
+                .interpolate(
+                    &colors,
+                    Point {
+                        x: x as f64,
+                        y: y as f64,
+                    },
+                )
+                .unwrap();
 
             if let Some(c) = c {
                 img.put_pixel(x as u32, y as u32, c.to_rgb());

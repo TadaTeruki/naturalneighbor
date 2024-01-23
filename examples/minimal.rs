@@ -32,13 +32,15 @@ fn main() {
     // Draw the interpolated colors on the image
     for x in 0..img_w {
         for y in 0..img_h {
-            let v = interpolator.interpolate(
-                &weights,
-                Point {
-                    x: x as f64,
-                    y: y as f64,
-                },
-            );
+            let v = interpolator
+                .interpolate(
+                    &weights,
+                    Point {
+                        x: x as f64,
+                        y: y as f64,
+                    },
+                )
+                .unwrap();
 
             if let Some(v) = v {
                 img.put_pixel(

@@ -35,18 +35,25 @@ fn on_point() {
         .collect::<Vec<_>>();
 
     for i in 0..test_n {
-        let value = interpolator.interpolate(
-            &values,
-            Point {
-                x: test_points[i].x,
-                y: test_points[i].y,
-            },
-        );
+        let value = interpolator
+            .interpolate(
+                &values,
+                Point {
+                    x: test_points[i].x,
+                    y: test_points[i].y,
+                },
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to interpolate {:?} with error {:?}",
+                    test_points[i], e
+                )
+            });
         if let Some(value) = value {
             let estimated = test_points[i].y * bound as f64 + test_points[i].x;
             assert!((value - estimated).abs() < 1e-8);
         } else {
-            assert!(false);
+            panic!("Failed to interpolate {:?}", test_points[i]);
         }
     }
 }
