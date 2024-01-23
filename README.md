@@ -11,7 +11,7 @@ This is a subproject for the [fastlem](https://github.com/TadaTeruki/fastlem).
 
 ```
 [dependencies]
-naturalneighbor = "1.1.3"
+naturalneighbor = "1.2.0"
 ```
 
 ## Benchmark
@@ -26,17 +26,19 @@ $ cargo bench
 Estimated time per 1 interpolation for 2D NNI with 1000, 10000, and 100000 sites.
 
 CPU: 11th Gen Intel i7-11390H (8) @ 5.000GHz<br>
-Version: 1.1.3
+Version: 1.2.0
 
 ||N=1000|N=10000|N=100000|
 |:---|:---:|:---:|:---:|
-|Estimated time|613.48 ns|932.48 ns|1.2171 µs|
+|Estimated time|617.64 ns|938.76 ns|1.2598 µs|
 
 ## Usage
 
 See the [API documentation](https://docs.rs/naturalneighbor) for details.
 
-Some examples are provided in the `examples` directory which are useful for understanding how to use this library.
+There are some examples in the `examples` directory that are useful for understanding how to use this library.
+
+Note that the computation of this library is much faster for the `--release` build.
 
 ## Preview
 
@@ -57,7 +59,7 @@ Contributions are welcome.
 
 The author is not a native English speaker. Please let me know if you find any grammatical errors in the documentation.
 
-Please also open an issue or pull request if you have any problems or suggestions.
+Please also feel free to open an issue or pull request if you have any problems or suggestions.
 
 ## License
 
