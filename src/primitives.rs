@@ -8,7 +8,9 @@ pub(crate) struct Triangle {
     aabb: AABB<[f64; 2]>,
 }
 
-static EPS: f64 = f64::EPSILON;
+// The epsiron value for the Triangle.
+// This is for querying 'all' triangles in a given AABB or point.
+static EPS_TRIANGLE: f64 = f64::EPSILON;
 
 impl Triangle {
     pub fn itriangle(&self) -> usize {
@@ -35,9 +37,10 @@ impl Triangle {
             points[triangle[2]].y,
         );
 
+        let eps = EPS_TRIANGLE;
         Self {
             itriangle: t,
-            aabb: AABB::from_corners([min_x - EPS, min_y - EPS], [max_x + EPS, max_y + EPS]),
+            aabb: AABB::from_corners([min_x - eps, min_y - eps], [max_x + eps, max_y + eps]),
         }
     }
 
@@ -59,7 +62,8 @@ impl Triangle {
             * (p1.x * p2.y - p1.y * p2.x + (p1.y - p2.y) * point.x + (p2.x - p1.x) * point.y);
         let u = 1.0 - s - t;
 
-        s >= -EPS && t >= -EPS && u >= -EPS
+        let eps = EPS_TRIANGLE;
+        s >= -eps && t >= -eps && u >= -eps
     }
 }
 

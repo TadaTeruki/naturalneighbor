@@ -1,16 +1,5 @@
 use crate::Point;
 
-pub(crate) fn triangle_is_too_steep(triangle: &[&Point; 3]) -> bool {
-    let p1 = triangle[0];
-    let p2 = triangle[1];
-    let p3 = triangle[2];
-
-    let eps = f32::EPSILON as f64;
-
-    ((p1.x - p2.x).abs() < eps && (p2.x - p3.x).abs() < eps)
-        || ((p1.y - p2.y).abs() < eps && (p2.y - p3.y).abs() < eps)
-}
-
 pub(crate) fn circumcenter(triangle: &[&Point; 3]) -> Point {
     let p1 = triangle[0];
     let p2 = triangle[1];

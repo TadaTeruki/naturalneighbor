@@ -5,7 +5,7 @@
 //! The implementation of this library is based on '[A Fast and Accurate Algorithm for Natural Neighbor Interpolation](https://gwlucastrig.github.io/TinfourDocs/NaturalNeighborTinfourAlgorithm/index.html)' by G.W. Lucas.
 
 use primitives::Triangle;
-use util::{circumcenter, circumcircle_with_radius_2, next_harfedge, triangle_is_too_steep};
+use util::{circumcenter, circumcircle_with_radius_2, next_harfedge};
 
 mod primitives;
 mod util;
@@ -71,6 +71,13 @@ where
 /// ```
 /// use naturalneighbor::{Point, Interpolator};
 ///
+/// // A macro for comparing floating point values.
+/// macro_rules! assert_approx_eq {
+///    ($a:expr, $b:expr) => {
+///     assert!(($a - $b).abs() < 1e-6);
+///   };
+/// }
+///
 /// let points = [
 ///     Point { x: 0.0, y: 0.0 },
 ///     Point { x: 100.0, y: 0.0 },
@@ -90,16 +97,17 @@ where
 ///     y: 50.0,
 /// }).unwrap();
 ///
-/// assert_eq!(value, 0.5);
+/// assert_approx_eq!(value, 0.5);
 ///
 /// let mut value_and_weight = interpolator.query_weights(Point {
 ///    x: 50.0,
 ///    y: 50.0,
 /// }).unwrap();
 ///
-/// value_and_weight.sort_by_key(|(i, _)| *i);
-/// assert_eq!(value_and_weight, vec![(0, 0.25), (1, 0.25), (2, 0.25), (3, 0.25)]);
-/// assert_eq!(value_and_weight.iter().map(|(i, w)| values[*i] * w).sum::<f64>(), 0.5);
+/// for (i, w) in value_and_weight.iter() {
+///    assert_approx_eq!(*w, 0.25);
+/// }
+/// assert_approx_eq!(value_and_weight.iter().map(|(i, w)| values[*i] * w).sum::<f64>(), 0.5);
 /// ```
 pub struct Interpolator {
     points: Vec<Point>,
@@ -107,6 +115,12 @@ pub struct Interpolator {
     harfedges: Vec<usize>,
     tree: rstar::RTree<Triangle>,
 }
+
+// The epsiron value for the Interpolator.
+// This is for slightly moving the point if the point is on the edge of the triangulation
+// because calculating the weight of the point on the edge is not stable.
+// This value must be larger tha primitives::EPS_TRIANGLE.
+static EPS_INTERPOLATOR: f64 = 1e-12;
 
 impl Interpolator {
     /// Create a new Interpolator from a slice of points.
@@ -188,6 +202,57 @@ impl Interpolator {
         pre - post
     }
 
+    fn fit_in_triangle(&self, ptarget: &Point, check_around: bool) -> Option<(usize, Point)> {
+        let triangles = self
+            .tree
+            .locate_all_at_point(&[ptarget.x, ptarget.y])
+            .filter(|circle| circle.point_in_triangle(&self.points, &self.triangles, ptarget))
+            .collect::<Vec<_>>();
+
+        if triangles.len() >= 2 {
+            if !check_around {
+                return None;
+            }
+            let eps = EPS_INTERPOLATOR;
+
+            // random (mannually selected) points around the target point
+            let check_angles = [
+                Point {
+                    x: eps * 1.415,
+                    y: eps * 1.339,
+                },
+                Point {
+                    x: eps * 1.335,
+                    y: -eps * 1.483,
+                },
+                Point {
+                    x: -eps * 1.421,
+                    y: -eps * 1.384,
+                },
+                Point {
+                    x: -eps * 1.498,
+                    y: eps * 1.322,
+                },
+            ];
+
+            for angle in check_angles {
+                let check_point = Point {
+                    x: ptarget.x + angle.x,
+                    y: ptarget.y + angle.y,
+                };
+                if let Some(t) = self.fit_in_triangle(&check_point, false) {
+                    return Some(t);
+                }
+            }
+
+            return None;
+        }
+
+        triangles
+            .get(0)
+            .map(|t| (t.itriangle() * 3, ptarget.clone()))
+    }
+
     /// Perform natural neighbor interpolation.
     ///
     /// The 'apply_weight' function is called if the point is iterated as one of the natural neighbors.
@@ -200,41 +265,12 @@ impl Interpolator {
         let ptarget = ptarget.into();
 
         // initial edge
-        let start: usize = {
-            let triangles = self
-                .tree
-                .locate_all_at_point(&[ptarget.x, ptarget.y])
-                .filter(|circle| circle.point_in_triangle(&self.points, &self.triangles, &ptarget))
-                .collect::<Vec<_>>();
-
-            if triangles.len() >= 3 {
-                let mut early_return = false;
-                triangles.iter().for_each(|t| {
-                    let it = t.itriangle();
-                    let triangle = [
-                        self.triangles[it * 3],
-                        self.triangles[it * 3 + 1],
-                        self.triangles[it * 3 + 2],
-                    ];
-
-                    triangle.iter().for_each(|i| {
-                        if self.points[*i].x == ptarget.x && self.points[*i].y == ptarget.y {
-                            apply_weight(*i, 1.0, 1.0);
-                            early_return = true;
-                        }
-                    });
-                });
-                if early_return {
-                    return;
-                }
-            }
-
-            if let Some(t) = triangles.get(0) {
-                t.itriangle() * 3
-            } else {
-                return;
-            }
+        let (start, ptarget) = if let Some(t) = self.fit_in_triangle(&ptarget, true) {
+            t
+        } else {
+            return;
         };
+
         // Stream of edges on the boyer-watson envelope.
         // edges.0 -> edges.1 -> edges.2
         // The result value is updated when all elements of edges are on the envelope.
@@ -252,7 +288,7 @@ impl Interpolator {
         // apply the weight.
         let mut apply = |edges: (usize, usize, usize), tmp_weight_sum: f64| -> f64 {
             let weight = self.calculate_weight_area(&ptarget, edges);
-            let tmp_weight_sum = tmp_weight_sum + weight;
+            let tmp_weight_sum: f64 = tmp_weight_sum + weight;
             apply_weight(self.triangles[edges.1], weight, tmp_weight_sum);
             tmp_weight_sum
         };
@@ -274,11 +310,6 @@ impl Interpolator {
                         &self.points[self.triangles[oit * 3 + 1]],
                         &self.points[self.triangles[oit * 3 + 2]],
                     ];
-
-                    // if the triangle is too steep, it should be ignored.
-                    if triangle_is_too_steep(&triangle_points) {
-                        break edge2;
-                    }
 
                     // circumcicle of the triangle
                     let (c, r2) = circumcircle_with_radius_2(&triangle_points);
