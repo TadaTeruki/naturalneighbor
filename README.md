@@ -11,7 +11,7 @@ This is a subproject for the [fastlem](https://github.com/TadaTeruki/fastlem).
 
 ```
 [dependencies]
-naturalneighbor = "1.2.1"
+naturalneighbor = "1.2.2"
 ```
 
 ## Benchmark
