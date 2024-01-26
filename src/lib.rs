@@ -116,6 +116,7 @@ where
 /// }
 /// assert_approx_eq!(value_and_weight.iter().map(|(i, w)| values[*i] * w).sum::<f64>(), 0.5);
 /// ```
+#[derive(Clone)]
 pub struct Interpolator {
     points: Vec<Point>,
     triangles: Vec<usize>,
