@@ -248,7 +248,7 @@ impl Interpolator {
         Ok(pre - post)
     }
 
-    fn fit_in_triangle(&self, ptarget: &Point, check_around: bool) -> Option<(usize, Point)> {
+    fn fit_in_triangle(&self, ptarget: &Point) -> Option<(usize, Point)> {
         let triangles = self
             .tree
             .locate_all_at_point(&[ptarget.x, ptarget.y])
@@ -256,43 +256,47 @@ impl Interpolator {
             .collect::<Vec<_>>();
 
         if triangles.len() >= 2 {
-            if !check_around {
-                return None;
-            }
-            let eps = EPS_INTERPOLATOR;
-
-            // random (mannually selected) points around the target point
-            let check_angles = [
-                Point {
-                    x: eps * 1.415,
-                    y: eps * 1.339,
-                },
-                Point {
-                    x: eps * 1.335,
-                    y: -eps * 1.483,
-                },
-                Point {
-                    x: -eps * 1.421,
-                    y: -eps * 1.384,
-                },
-                Point {
-                    x: -eps * 1.498,
-                    y: eps * 1.322,
-                },
-            ];
-
-            for angle in check_angles {
-                let check_point = Point {
-                    x: ptarget.x + angle.x,
-                    y: ptarget.y + angle.y,
-                };
-                if let Some(t) = self.fit_in_triangle(&check_point, false) {
-                    return Some(t);
-                }
-            }
-
             return None;
         }
+
+        // if triangles.len() >= 2 {
+        //     if !check_around {
+        //         return None;
+        //     }
+        //     let eps = EPS_INTERPOLATOR;
+
+        //     // random (mannually selected) points around the target point
+        //     let check_angles = [
+        //         Point {
+        //             x: eps * 1.415,
+        //             y: eps * 1.339,
+        //         },
+        //         Point {
+        //             x: eps * 1.335,
+        //             y: -eps * 1.483,
+        //         },
+        //         Point {
+        //             x: -eps * 1.421,
+        //             y: -eps * 1.384,
+        //         },
+        //         Point {
+        //             x: -eps * 1.498,
+        //             y: eps * 1.322,
+        //         },
+        //     ];
+
+        //     for angle in check_angles {
+        //         let check_point = Point {
+        //             x: ptarget.x + angle.x,
+        //             y: ptarget.y + angle.y,
+        //         };
+        //         if let Some(t) = self.fit_in_triangle(&check_point, false) {
+        //             return Some(t);
+        //         }
+        //     }
+
+        //     return None;
+        // }
 
         triangles
             .get(0)
@@ -315,7 +319,7 @@ impl Interpolator {
         let ptarget = ptarget.into();
 
         // initial edge
-        let (start, ptarget) = if let Some(t) = self.fit_in_triangle(&ptarget, true) {
+        let (start, ptarget) = if let Some(t) = self.fit_in_triangle(&ptarget) {
             t
         } else {
             return Ok(());
