@@ -63,4 +63,4 @@ Feel free to open an issue or pull request if you have any problems or suggestio
 
 MIT
 
-Copyright (c) 2023 Teruki TADA
+Copyright 2023 Teruki TADA
