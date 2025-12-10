@@ -78,7 +78,7 @@ where
 /// // A macro for comparing floating point values.
 /// macro_rules! assert_approx_eq {
 ///    ($a:expr, $b:expr) => {
-///     assert!(($a - $b).abs() < 1e-6);
+///     assert!((($a as f64) - ($b as f64)).abs() < 1e-6);
 ///   };
 /// }
 ///
