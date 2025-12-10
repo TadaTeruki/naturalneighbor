@@ -129,9 +129,8 @@ pub struct Interpolator {
 static DEFAULT_DEGREE_LIMITATION: usize = 30;
 
 enum PointLocation {
-    InsideTriangle(usize),     // (triangle index)
-    OnEdge(usize, usize, f64), // (point index1, point index2, weight for point index1)
-    OnPoint(usize),            // point index
+    InsideTriangle(usize), // (triangle index)
+    OnPoint(usize),        // point index
     Outside,
 }
 
@@ -255,6 +254,38 @@ impl Interpolator {
             .locate_all_at_point(&[ptarget.x, ptarget.y])
             .filter(|circle| circle.point_in_triangle(&self.points, &self.triangles, ptarget))
             .collect::<Vec<_>>();
+        // if ptarget is on a vertex
+        if triangles.len() >= 3 {
+            let t1 = triangles[0].itriangle();
+            let t2 = triangles[1].itriangle();
+            let t3 = triangles[2].itriangle();
+
+            let vertices1 = [
+                self.triangles[t1 * 3],
+                self.triangles[t1 * 3 + 1],
+                self.triangles[t1 * 3 + 2],
+            ];
+            let vertices2 = [
+                self.triangles[t2 * 3],
+                self.triangles[t2 * 3 + 1],
+                self.triangles[t2 * 3 + 2],
+            ];
+            let vertices3 = [
+                self.triangles[t3 * 3],
+                self.triangles[t3 * 3 + 1],
+                self.triangles[t3 * 3 + 2],
+            ];
+
+            // Find the common vertex among all three triangles
+            for &v in &vertices1 {
+                if vertices2.contains(&v) && vertices3.contains(&v) {
+                    return PointLocation::OnPoint(v);
+                }
+            }
+
+            // Fallback: treat as inside the first triangle
+            return PointLocation::InsideTriangle(t1);
+        }
 
         triangles
             .get(0)
@@ -279,11 +310,6 @@ impl Interpolator {
 
         let start = match self.get_point_location(&ptarget) {
             PointLocation::InsideTriangle(ti) => ti * 3,
-            PointLocation::OnEdge(pi1, pi2, w1) => {
-                apply_weight(pi1, w1, w1);
-                apply_weight(pi2, 1.0 - w1, 1.0);
-                return Ok(());
-            }
             PointLocation::OnPoint(pi) => {
                 apply_weight(pi, 1.0, 1.0);
                 return Ok(());
