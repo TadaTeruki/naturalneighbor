@@ -288,7 +288,7 @@ impl Interpolator {
         }
 
         triangles
-            .get(0)
+            .first()
             .map(|triangle| PointLocation::InsideTriangle(triangle.itriangle()))
             .unwrap_or(PointLocation::Outside)
     }
@@ -423,6 +423,9 @@ impl Interpolator {
 
         let mut value: Option<V> = None;
         self.perform_interpoation::<P>(ptarget, &mut |i, weight, tmp_weight_sum| {
+            if !weight.is_finite() {
+                return;
+            }
             let vbase = &values[i];
             let new_value = if let Some(value) = &value {
                 Some(value.lerp(vbase, weight / tmp_weight_sum))

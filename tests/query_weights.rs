@@ -25,32 +25,26 @@ fn query_weights() {
         })
         .collect::<Vec<_>>();
 
-    for i in 0..100 {
+    for test_point in test_points.iter().take(100) {
         let value1 = interpolator
             .interpolate(
                 &values,
                 Point {
-                    x: test_points[i].x,
-                    y: test_points[i].y,
+                    x: test_point.x,
+                    y: test_point.y,
                 },
             )
             .unwrap_or_else(|e| {
-                panic!(
-                    "Failed to interpolate {:?} with error {:?}",
-                    test_points[i], e
-                )
+                panic!("Failed to interpolate {:?} with error {:?}", test_point, e)
             });
 
         let queried_weights = interpolator
             .query_weights(Point {
-                x: test_points[i].x,
-                y: test_points[i].y,
+                x: test_point.x,
+                y: test_point.y,
             })
             .unwrap_or_else(|e| {
-                panic!(
-                    "Failed to interpolate {:?} with error {:?}",
-                    test_points[i], e
-                )
+                panic!("Failed to interpolate {:?} with error {:?}", test_point, e)
             });
 
         if let Some(weights) = queried_weights {

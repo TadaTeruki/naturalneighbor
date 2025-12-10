@@ -25,12 +25,12 @@ fn random_points() {
         })
         .collect::<Vec<_>>();
 
-    for i in 0..test_n {
+    for test_point in test_points.iter().take(test_n) {
         let _ = interpolator.interpolate(
             &values,
             Point {
-                x: test_points[i].x,
-                y: test_points[i].y,
+                x: test_point.x,
+                y: test_point.y,
             },
         );
     }

@@ -3,7 +3,7 @@ use naturalneighbor::{Interpolator, Point};
 fn main() {
     let (img_w, img_h) = (800, 800);
 
-    let mut img = ImageBuffer::from_pixel(img_w, img_h, Rgb([255 as u8, 255, 255]));
+    let mut img = ImageBuffer::from_pixel(img_w, img_h, Rgb([255_u8, 255, 255]));
 
     let points = [
         Point { x: 0.0, y: 0.0 },
@@ -44,8 +44,8 @@ fn main() {
 
             if let Some(v) = v {
                 img.put_pixel(
-                    x as u32,
-                    y as u32,
+                    x,
+                    y,
                     Rgb([(v * 255.0) as u8, (v * 255.0) as u8, (v * 255.0) as u8]),
                 );
             }

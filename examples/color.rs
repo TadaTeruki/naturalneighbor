@@ -10,7 +10,7 @@ pub struct Color {
 }
 
 impl Color {
-    fn to_rgb(&self) -> Rgb<u8> {
+    fn to_rgb(self) -> Rgb<u8> {
         Rgb([
             (self.r * 255.) as u8,
             (self.g * 255.) as u8,
@@ -75,7 +75,7 @@ fn main() {
     let radius = 3.0;
 
     let (img_w, img_h) = (1000, 500);
-    let mut img = ImageBuffer::from_pixel(img_w, img_h, Rgb([255 as u8, 255, 255]));
+    let mut img = ImageBuffer::from_pixel(img_w, img_h, Rgb([255_u8, 255, 255]));
     let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_seed([0; 32]);
 
     let points = (0..n)
@@ -104,7 +104,7 @@ fn main() {
                 .unwrap();
 
             if let Some(c) = c {
-                img.put_pixel(x as u32, y as u32, c.to_rgb());
+                img.put_pixel(x, y, c.to_rgb());
             }
         }
     }
