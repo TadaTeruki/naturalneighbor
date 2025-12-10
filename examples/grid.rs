@@ -5,27 +5,6 @@ fn main() {
 
     let mut img = ImageBuffer::from_pixel(img_w, img_h, Rgb([255 as u8, 255, 255]));
 
-    // let points = [
-    //     Point { x: 0.0, y: 0.0 },
-    //     Point { x: 800.0, y: 0.0 },
-    //     Point { x: 800.0, y: 800.0 },
-    //     Point { x: 0.0, y: 800.0 },
-    //     Point { x: 454.0, y: 223.0 },
-    //     Point { x: 302.0, y: 345.0 },
-    //     Point { x: 258.0, y: 632.0 },
-    //     Point { x: 620.0, y: 513.0 },
-    //     Point { x: 285.0, y: 479.0 },
-    //     Point { x: 444.0, y: 453.0 },
-    //     Point { x: 537.0, y: 315.0 },
-    //     Point { x: 425.0, y: 610.0 },
-    //     Point { x: 528.0, y: 223.0 },
-    // ];
-
-    // // weights of the points to be interpolated
-    // let weights = [
-    //     0.4, 0.9, 0.0, 0.7, 0.1, 0.3, 0.2, 0.4, 0.9, 0.0, 0.7, 0.8, 0.5,
-    // ];
-
     let mut points = Vec::new();
     let mut weights = Vec::new();
     let grid_size = 20;

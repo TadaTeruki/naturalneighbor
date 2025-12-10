@@ -125,14 +125,15 @@ pub struct Interpolator {
     degree_limitation: usize,
 }
 
-// The epsiron value for the interpolator.
-// This is used to move the point slightly when the point is on the edge of the triangulation.
-// because calculating the weight of the point on the edge is not stable.
-// This value must be greater than primitives::EPS_TRIANGLE.
-static EPS_INTERPOLATOR: f64 = 1e-12;
-
 // The default degree limitation of the interpolator.
 static DEFAULT_DEGREE_LIMITATION: usize = 30;
+
+enum PointLocation {
+    InsideTriangle(usize),     // (triangle index)
+    OnEdge(usize, usize, f64), // (point index1, point index2, weight for point index1)
+    OnPoint(usize),            // point index
+    Outside,
+}
 
 #[derive(Error, Debug)]
 pub enum InterpolatorError {
@@ -248,59 +249,17 @@ impl Interpolator {
         Ok(pre - post)
     }
 
-    fn fit_in_triangle(&self, ptarget: &Point) -> Option<(usize, Point)> {
+    fn get_point_location(&self, ptarget: &Point) -> PointLocation {
         let triangles = self
             .tree
             .locate_all_at_point(&[ptarget.x, ptarget.y])
             .filter(|circle| circle.point_in_triangle(&self.points, &self.triangles, ptarget))
             .collect::<Vec<_>>();
 
-        if triangles.len() >= 2 {
-            return None;
-        }
-
-        // if triangles.len() >= 2 {
-        //     if !check_around {
-        //         return None;
-        //     }
-        //     let eps = EPS_INTERPOLATOR;
-
-        //     // random (mannually selected) points around the target point
-        //     let check_angles = [
-        //         Point {
-        //             x: eps * 1.415,
-        //             y: eps * 1.339,
-        //         },
-        //         Point {
-        //             x: eps * 1.335,
-        //             y: -eps * 1.483,
-        //         },
-        //         Point {
-        //             x: -eps * 1.421,
-        //             y: -eps * 1.384,
-        //         },
-        //         Point {
-        //             x: -eps * 1.498,
-        //             y: eps * 1.322,
-        //         },
-        //     ];
-
-        //     for angle in check_angles {
-        //         let check_point = Point {
-        //             x: ptarget.x + angle.x,
-        //             y: ptarget.y + angle.y,
-        //         };
-        //         if let Some(t) = self.fit_in_triangle(&check_point, false) {
-        //             return Some(t);
-        //         }
-        //     }
-
-        //     return None;
-        // }
-
         triangles
             .get(0)
-            .map(|t| (t.itriangle() * 3, ptarget.clone()))
+            .map(|triangle| PointLocation::InsideTriangle(triangle.itriangle()))
+            .unwrap_or(PointLocation::Outside)
     }
 
     /// Perform natural neighbor interpolation.
@@ -318,11 +277,20 @@ impl Interpolator {
     {
         let ptarget = ptarget.into();
 
-        // initial edge
-        let (start, ptarget) = if let Some(t) = self.fit_in_triangle(&ptarget) {
-            t
-        } else {
-            return Ok(());
+        let start = match self.get_point_location(&ptarget) {
+            PointLocation::InsideTriangle(ti) => ti * 3,
+            PointLocation::OnEdge(pi1, pi2, w1) => {
+                apply_weight(pi1, w1, w1);
+                apply_weight(pi2, 1.0 - w1, 1.0);
+                return Ok(());
+            }
+            PointLocation::OnPoint(pi) => {
+                apply_weight(pi, 1.0, 1.0);
+                return Ok(());
+            }
+            PointLocation::Outside => {
+                return Ok(());
+            }
         };
 
         // Stream of edges on the boyer-watson envelope.

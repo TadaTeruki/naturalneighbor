@@ -8,9 +8,7 @@ pub(crate) struct Triangle {
     aabb: AABB<[f64; 2]>,
 }
 
-// The epsiron value for the Triangle.
-// This is for querying 'all' triangles in a given AABB or point.
-static EPS_TRIANGLE: f64 = f64::EPSILON;
+static EPS_TRIANGLE: f64 = 1e-8;
 
 impl Triangle {
     pub fn itriangle(&self) -> usize {
